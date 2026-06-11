@@ -1,0 +1,196 @@
+import SwiftUI
+
+// MARK: - Color Palette
+extension Color {
+    
+    // Brand
+    static let brandPrimary = Color.hex("#433075")   // Deep Purple
+    static let brandAccent  = Color.hex("#A58CF4")   // Lavender
+    static let brandDanger  = Color.hex("#E5484D")
+    
+    // Surfaces
+    static let surfaceBase     = Color.hex("#FAFAFA") // Soft White
+    static let surfaceCard     = Color.white
+    static let surfaceElevated = Color.hex("#F4F1FF")
+    
+    // Text
+    static let textPrimary   = Color.hex("#0D0D0D") // Jet Black
+    static let textSecondary = Color.hex("#0D0D0D").opacity(0.65)
+    static let textTertiary  = Color.hex("#0D0D0D").opacity(0.35)
+    
+    // Semantic
+    static let successGreen = Color.hex("#22C55E")
+    static let warningAmber = Color.hex("#F59E0B")
+    static let errorRed     = Color.hex("#E5484D")
+    
+    // Borders
+    static let borderSoft   = Color.hex("#E9E2FF")
+    static let borderStrong = Color.hex("#CFC2FF")
+    
+    // Fallbacks
+    static let primaryFallback = Color.hex("#433075")
+    static let accentFallback  = Color.hex("#A58CF4")
+    static let cardFallback    = Color.white
+    static let baseFallback    = Color.hex("#FAFAFA")
+}
+
+// MARK: - Hex Support
+extension Color {
+    static func hex(_ hex: String) -> Color {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: cleaned).scanHexInt64(&int)
+        
+        let r, g, b: UInt64
+        
+        switch cleaned.count {
+        case 6:
+            r = (int >> 16) & 0xFF
+            g = (int >> 8) & 0xFF
+            b = int & 0xFF
+        default:
+            r = 255
+            g = 255
+            b = 255
+        }
+        
+        return Color(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: 1
+        )
+    }
+}
+
+// MARK: - Typography
+struct AppFont {
+    static func largeTitle()  -> Font { .system(size: 34, weight: .bold, design: .rounded) }
+    static func title1()      -> Font { .system(size: 28, weight: .bold, design: .rounded) }
+    static func title2()      -> Font { .system(size: 22, weight: .semibold, design: .rounded) }
+    static func title3()      -> Font { .system(size: 20, weight: .semibold, design: .rounded) }
+    static func headline()    -> Font { .system(size: 17, weight: .semibold, design: .rounded) }
+    static func body()        -> Font { .system(size: 17, weight: .regular, design: .rounded) }
+    static func callout()     -> Font { .system(size: 16, weight: .regular, design: .rounded) }
+    static func subheadline() -> Font { .system(size: 15, weight: .medium, design: .rounded) }
+    static func footnote()    -> Font { .system(size: 13, weight: .regular, design: .rounded) }
+    static func caption()     -> Font { .system(size: 12, weight: .regular, design: .rounded) }
+    static func caption2()    -> Font { .system(size: 11, weight: .medium, design: .rounded) }
+}
+
+// MARK: - Spacing
+struct AppSpacing {
+    static let xs: CGFloat = 4
+    static let sm: CGFloat = 8
+    static let md: CGFloat = 16
+    static let lg: CGFloat = 24
+    static let xl: CGFloat = 32
+    static let xxl: CGFloat = 48
+}
+
+// MARK: - Radius
+struct AppRadius {
+    static let xs: CGFloat = 6
+    static let sm: CGFloat = 10
+    static let md: CGFloat = 14
+    static let lg: CGFloat = 20
+    static let xl: CGFloat = 28
+    static let full: CGFloat = 999
+}
+
+// MARK: - Gradients
+extension LinearGradient {
+    
+    static var brandGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color.brandPrimary, Color.brandAccent],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    static var cardGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color.white, Color.surfaceElevated],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+    
+    static var heroGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.brandPrimary,
+                Color.brandAccent.opacity(0.9)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+}
+
+// MARK: - Shadows
+struct AppShadow {
+    static let soft   = Color.brandPrimary.opacity(0.08)
+    static let medium = Color.brandPrimary.opacity(0.14)
+}
+
+// MARK: - Card Modifier
+struct CardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(LinearGradient.cardGradient)
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: AppRadius.lg,
+                    style: .continuous
+                )
+            )
+            .overlay(
+                RoundedRectangle(
+                    cornerRadius: AppRadius.lg,
+                    style: .continuous
+                )
+                .stroke(Color.borderSoft, lineWidth: 1)
+            )
+            .shadow(
+                color: AppShadow.soft,
+                radius: 12,
+                x: 0,
+                y: 6
+            )
+    }
+}
+
+// MARK: - Glass Modifier
+struct GlassModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(.ultraThinMaterial)
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: AppRadius.lg,
+                    style: .continuous
+                )
+            )
+            .overlay(
+                RoundedRectangle(
+                    cornerRadius: AppRadius.lg,
+                    style: .continuous
+                )
+                .stroke(Color.white.opacity(0.25), lineWidth: 1)
+            )
+    }
+}
+
+// MARK: - View Extensions
+extension View {
+    func cardStyle() -> some View {
+        modifier(CardModifier())
+    }
+    
+    func glassStyle() -> some View {
+        modifier(GlassModifier())
+    }
+}
