@@ -9,12 +9,55 @@ struct RegisterView: View {
     @State private var password = ""
     @State private var confirm  = ""
     @State private var animateGlow = false
+    @State private var hasAttemptedSubmit = false
     @FocusState private var focused: Field?
 
     enum Field { case name, email, password, confirm }
 
     private var isValid: Bool {
         !name.isBlank && email.isValidEmail && password.count >= 6 && password == confirm
+    }
+
+    // Validation error messages
+    private var nameError: String? {
+        guard hasAttemptedSubmit else { return nil }
+        if name.isBlank {
+            return "Nama tidak boleh kosong"
+        }
+        return nil
+    }
+
+    private var emailError: String? {
+        guard hasAttemptedSubmit else { return nil }
+        if email.isBlank {
+            return "Email tidak boleh kosong"
+        }
+        if !email.isValidEmail {
+            return "Format email tidak sesuai"
+        }
+        return nil
+    }
+
+    private var passwordError: String? {
+        guard hasAttemptedSubmit else { return nil }
+        if password.isBlank {
+            return "Password tidak boleh kosong"
+        }
+        if password.count < 6 {
+            return "Password minimal 6 karakter"
+        }
+        return nil
+    }
+
+    private var confirmError: String? {
+        guard hasAttemptedSubmit else { return nil }
+        if confirm.isBlank {
+            return "Konfirmasi password tidak boleh kosong"
+        }
+        if password != confirm {
+            return "Password tidak cocok"
+        }
+        return nil
     }
 
     var body: some View {
@@ -49,27 +92,69 @@ struct RegisterView: View {
                 .padding(.top, 28)
 
                 // Form
-                VStack(spacing: 14) {
-                    regTextField(icon: "person.fill", placeholder: "Nama lengkap", text: $name)
-                        .focused($focused, equals: .name)
+                VStack(spacing: 16) {
+                    // Name field
+                    VStack(alignment: .leading, spacing: 6) {
+                        regTextField(icon: "person.fill", placeholder: "Nama lengkap", text: $name, hasError: nameError != nil)
+                            .focused($focused, equals: .name)
 
-                    regTextField(icon: "envelope.fill", placeholder: "Email", text: $email, keyboardType: .emailAddress)
-                        .focused($focused, equals: .email)
-
-                    regSecureField(icon: "lock.fill", placeholder: "Password (min 6 karakter)", text: $password)
-                        .focused($focused, equals: .password)
-
-                    regSecureField(icon: "lock.fill", placeholder: "Konfirmasi password", text: $confirm)
-                        .focused($focused, equals: .confirm)
-
-                    // Password match hint
-                    if !confirm.isEmpty && password != confirm {
-                        HStack(spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                            Text("Password tidak cocok")
+                        if let error = nameError {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.system(size: 12))
+                                Text(error)
+                                    .font(AppFont.footnote())
+                            }
+                            .foregroundColor(.errorRed)
                         }
-                        .font(AppFont.footnote())
-                        .foregroundColor(.errorRed)
+                    }
+
+                    // Email field
+                    VStack(alignment: .leading, spacing: 6) {
+                        regTextField(icon: "envelope.fill", placeholder: "Email", text: $email, keyboardType: .emailAddress, hasError: emailError != nil)
+                            .focused($focused, equals: .email)
+
+                        if let error = emailError {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.system(size: 12))
+                                Text(error)
+                                    .font(AppFont.footnote())
+                            }
+                            .foregroundColor(.errorRed)
+                        }
+                    }
+
+                    // Password field
+                    VStack(alignment: .leading, spacing: 6) {
+                        regSecureField(icon: "lock.fill", placeholder: "Password (min 6 karakter)", text: $password, hasError: passwordError != nil)
+                            .focused($focused, equals: .password)
+
+                        if let error = passwordError {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.system(size: 12))
+                                Text(error)
+                                    .font(AppFont.footnote())
+                            }
+                            .foregroundColor(.errorRed)
+                        }
+                    }
+
+                    // Confirm password field
+                    VStack(alignment: .leading, spacing: 6) {
+                        regSecureField(icon: "lock.fill", placeholder: "Konfirmasi password", text: $confirm, hasError: confirmError != nil)
+                            .focused($focused, equals: .confirm)
+
+                        if let error = confirmError {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.system(size: 12))
+                                Text(error)
+                                    .font(AppFont.footnote())
+                            }
+                            .foregroundColor(.errorRed)
+                        }
                     }
                 }
                 .padding(.top, 28)
@@ -85,6 +170,11 @@ struct RegisterView: View {
                 // Register button
                 Button {
                     focused = nil
+                    hasAttemptedSubmit = true
+
+                    // Only proceed if valid
+                    guard isValid else { return }
+
                     Task { await authVM.register(name: name, email: email, password: password) }
                 } label: {
                     ZStack {
@@ -108,7 +198,7 @@ struct RegisterView: View {
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.full, style: .continuous))
                     .shadow(color: Color(hex: "#8E6BFF").opacity(0.45), radius: 12, y: 4)
                 }
-                .disabled(!isValid || authVM.isLoading)
+                .disabled(authVM.isLoading)
                 .padding(.top, 28)
 
                 Spacer().frame(height: 40)
@@ -173,16 +263,23 @@ struct RegisterView: View {
         )
         .onAppear {
             animateGlow = true
+            authVM.clearErrors()
+            hasAttemptedSubmit = false
+        }
+        .alert("Akun Disuspend", isPresented: $authVM.showSuspendedAlert) {
+            Button("Tutup", role: .cancel) { }
+        } message: {
+            Text("Akun kamu telah disuspend oleh admin.\n\nSilakan hubungi admin untuk informasi lebih lanjut atau ajukan banding.")
         }
         .preferredColorScheme(.dark)
     }
 
     // MARK: - Reusable text field
-    private func regTextField(icon: String, placeholder: String, text: Binding<String>, keyboardType: UIKeyboardType = .default) -> some View {
+    private func regTextField(icon: String, placeholder: String, text: Binding<String>, keyboardType: UIKeyboardType = .default, hasError: Bool = false) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(hasError ? .errorRed : .white.opacity(0.5))
                 .frame(width: 20)
             TextField("", text: text, prompt: Text(placeholder).foregroundColor(.white.opacity(0.35)))
                 .keyboardType(keyboardType)
@@ -194,12 +291,15 @@ struct RegisterView: View {
         .padding(16)
         .background(Color.white.opacity(0.07))
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(Color.white.opacity(0.12)))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(hasError ? Color.errorRed : Color.white.opacity(0.12), lineWidth: hasError ? 1.5 : 1)
+        )
     }
 
     @ViewBuilder
-    private func regSecureField(icon: String, placeholder: String, text: Binding<String>) -> some View {
-        RegSecureFieldView(icon: icon, placeholder: placeholder, text: text)
+    private func regSecureField(icon: String, placeholder: String, text: Binding<String>, hasError: Bool = false) -> some View {
+        RegSecureFieldView(icon: icon, placeholder: placeholder, text: text, hasError: hasError)
     }
 }
 
@@ -208,13 +308,14 @@ private struct RegSecureFieldView: View {
     let icon: String
     let placeholder: String
     @Binding var text: String
+    var hasError: Bool = false
     @State private var isVisible = false
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(hasError ? .errorRed : .white.opacity(0.5))
                 .frame(width: 20)
             Group {
                 if isVisible {
@@ -236,7 +337,10 @@ private struct RegSecureFieldView: View {
         .padding(16)
         .background(Color.white.opacity(0.07))
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(Color.white.opacity(0.12)))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(hasError ? Color.errorRed : Color.white.opacity(0.12), lineWidth: hasError ? 1.5 : 1)
+        )
     }
 }
 

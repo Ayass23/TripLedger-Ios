@@ -85,8 +85,14 @@ struct ReceiptScanView: View {
                                                 Text("• \(item.name)")
                                                     .font(AppFont.caption()).foregroundColor(.textPrimary.opacity(0.7))
                                                 Spacer()
-                                                Text("\(parsed.currency) \(Int(item.price).description)")
-                                                    .font(AppFont.caption()).foregroundColor(.textPrimary.opacity(0.7))
+                                                if let price = item.price {
+                                                    let priceInt = Int(price)
+                                                    Text("\(parsed.currency) \(priceInt)")
+                                                        .font(AppFont.caption()).foregroundColor(.textPrimary.opacity(0.7))
+                                                } else {
+                                                    Text("Gratis")
+                                                        .font(AppFont.caption()).foregroundColor(.textPrimary.opacity(0.5))
+                                                }
                                             }
                                         }
 

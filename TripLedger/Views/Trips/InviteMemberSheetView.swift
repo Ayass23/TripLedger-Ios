@@ -304,7 +304,7 @@ struct InviteMemberSheetView: View {
             Text("Cari Pengguna")
                 .font(AppFont.headline())
                 .foregroundColor(.textPrimary)
-            Text("Ketik nama atau email untuk mencari pengguna")
+            Text("Ketik username untuk mencari pengguna")
                 .font(AppFont.subheadline())
                 .foregroundColor(.textSecondary)
                 .multilineTextAlignment(.center)

@@ -12,6 +12,8 @@ enum Collection {
     static let notifications = "notifications"
     static let friendRequests = "friendRequests"
     static let invites      = "tripInvites"
+    static let splitBills   = "splitBills"
+    static let reports      = "reports"
 }
 
 // MARK: - Firestore Service (generic CRUD)

@@ -55,9 +55,9 @@ final class AIService {
         1. Ekstrak nama toko/merchant (biasanya di baris pertama atau paling atas)
         2. Cari total akhir (keyword: "TOTAL", "GRAND TOTAL", "Total Pembayaran", "JUMLAH")
         3. Format harga Indonesia menggunakan titik sebagai thousand separator (contoh: 50.000 = lima puluh ribu rupiah)
-        4. Ekstrak SEMUA item dengan harganya (sebelum baris pajak/service charge)
+        4. Ekstrak SEMUA item dengan harganya (sebelum baris pajak/service charge/discount)
         5. Identifikasi kategori berdasarkan nama merchant atau jenis item
-        6. Cari pajak (keyword: "PB1", "Pajak", "Tax", "PPn") dan service charge
+        6. Cari pajak (keyword: "PB1", "Pajak", "Tax", "PPn"), service charge, dan DISKON (keyword: "DISKON", "DISCOUNT", "POTONGAN", "DISC")
 
         KATEGORI yang valid:
         - "Food" untuk restoran, cafe, makanan/minuman
@@ -99,7 +99,8 @@ final class AIService {
             ],
             "date": "2024-05-14",
             "taxAmount": 5000,
-            "serviceCharge": 2500
+            "serviceCharge": 2500,
+            "discount": 10000
         }
 
         PENTING:
@@ -108,6 +109,7 @@ final class AIService {
         - Hapus SEMUA koma dari angka jika ada
         - Jangan interpretasikan titik sebagai desimal!
         - Jika tidak ada data, gunakan null
+        - Jika ada item tanpa harga (seperti plastik gratis), set price = null atau jangan include item tersebut
         - Return ONLY JSON, no explanation
         """
 
@@ -120,13 +122,13 @@ final class AIService {
         // Prepare request
         print("🤖 [AIService] Calling OpenAI API...")
         let requestBody: [String: Any] = [
-            "model": "gpt-4o-mini",  // Fixed: was "gpt-5.4-nano"
+            "model": "gpt-5.4-mini-2026-03-17",
             "messages": [
                 ["role": "system", "content": "Kamu adalah ahli dalam membaca dan menganalisis struk pembayaran Indonesia. Return hanya valid JSON tanpa teks tambahan."],
                 ["role": "user", "content": prompt]
             ],
             "temperature": 0.2,  // Lower for more consistent results
-            "max_tokens": 1500
+            "max_completion_tokens": 1500  // Changed from max_tokens for new model
         ]
 
         guard let url = URL(string: apiEndpoint) else {
@@ -209,7 +211,11 @@ final class AIService {
         print("   🏷️  Category: \(parsedResponse.category ?? "nil")")
         print("   📦 Items: \(items.count)")
         for (idx, item) in items.enumerated() {
-            print("      \(idx+1). \(item.name) - \(currency) \(item.price) (raw: \(item.price))")
+            if let price = item.price {
+                print("      \(idx+1). \(item.name) - \(currency) \(price) (raw: \(price))")
+            } else {
+                print("      \(idx+1). \(item.name) - (no price)")
+            }
         }
 
         // Auto-fix amounts that are too small (AI misinterpreted dots as decimals)
@@ -217,6 +223,7 @@ final class AIService {
         var fixedItems = items
         var fixedTaxAmount = parsedResponse.taxAmount
         var fixedServiceCharge = parsedResponse.serviceCharge
+        var fixedDiscount = parsedResponse.discount
 
         if currency == "Rp" || currency == "IDR" {
             // Auto-fix total amount
@@ -228,9 +235,9 @@ final class AIService {
             // Auto-fix item prices
             fixedItems = items.map { item in
                 var fixedItem = item
-                if item.price < 1000 && item.price > 0 {
-                    print("⚠️ [AIService] AUTO-FIX: \(item.name) \(item.price) → \(item.price * 1000)")
-                    fixedItem.price *= 1000
+                if let price = item.price, price < 1000 && price > 0 {
+                    print("⚠️ [AIService] AUTO-FIX: \(item.name) \(price) → \(price * 1000)")
+                    fixedItem.price = price * 1000
                 }
                 return fixedItem
             }
@@ -246,6 +253,12 @@ final class AIService {
                 print("⚠️ [AIService] AUTO-FIX: Service \(service) → \(service * 1000)")
                 fixedServiceCharge = service * 1000
             }
+
+            // Auto-fix discount
+            if let disc = fixedDiscount, disc < 1000 && disc > 0 {
+                print("⚠️ [AIService] AUTO-FIX: Discount \(disc) → \(disc * 1000)")
+                fixedDiscount = disc * 1000
+            }
         }
 
         // Convert to ParsedReceiptModel with fixed amounts
@@ -257,7 +270,8 @@ final class AIService {
             items: fixedItems,
             date: parsedResponse.date,
             taxAmount: fixedTaxAmount,
-            serviceCharge: fixedServiceCharge
+            serviceCharge: fixedServiceCharge,
+            discount: fixedDiscount
         )
 
         print("🎉 [AIService] Parsing completed successfully!")
@@ -359,7 +373,8 @@ final class AIService {
             items: items,
             date: nil,
             taxAmount: nil,
-            serviceCharge: nil
+            serviceCharge: nil,
+            discount: nil
         )
 
         print("✅ [AIService] Mock parsing completed")

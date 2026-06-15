@@ -10,6 +10,9 @@ struct FriendDetailView: View {
     let friend: UserModel
 
     @State private var showDeleteAlert = false
+    @State private var showSuccessAlert = false
+    @State private var showReportSheet = false
+    @State private var showReportSuccessAlert = false
 
     // Computed property untuk trip bersama
     private var sharedTrips: [TripModel] {
@@ -121,11 +124,21 @@ struct FriendDetailView: View {
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showDeleteAlert = true
+                    Menu {
+                        Button {
+                            showReportSheet = true
+                        } label: {
+                            Label("Laporkan", systemImage: "exclamationmark.triangle")
+                        }
+
+                        Button(role: .destructive) {
+                            showDeleteAlert = true
+                        } label: {
+                            Label("Hapus Teman", systemImage: "trash")
+                        }
                     } label: {
-                        Image(systemName: "trash")
-                            .foregroundColor(.errorRed)
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundColor(.textPrimary)
                     }
                 }
             }
@@ -136,12 +149,43 @@ struct FriendDetailView: View {
                         guard let currentUID = authVM.currentUser?.uid else { return }
                         await friendsVM.removeFriend(friendID: friend.uid, currentUID: currentUID)
                         if friendsVM.errorMessage == nil {
-                            dismiss()
+                            // Refresh user data
+                            await authVM.refreshUser()
+
+                            // Refresh friends list
+                            if let updatedUser = authVM.currentUser {
+                                await friendsVM.loadFriends(currentUser: updatedUser)
+                            }
+
+                            // Show success alert
+                            showSuccessAlert = true
                         }
                     }
                 }
             } message: {
                 Text("Apakah kamu yakin ingin menghapus \(friend.displayName) dari daftar teman? Kalian tidak akan bisa melihat trip bersama lagi.")
+            }
+            .alert("Berhasil Dihapus", isPresented: $showSuccessAlert) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("\(friend.displayName) telah dihapus dari daftar teman.")
+            }
+            .sheet(isPresented: $showReportSheet) {
+                ReportFriendSheet(
+                    isPresented: $showReportSheet,
+                    friend: friend,
+                    onSuccess: {
+                        showReportSuccessAlert = true
+                    }
+                )
+                .environmentObject(authVM)
+            }
+            .alert("Laporan Dikirim", isPresented: $showReportSuccessAlert) {
+                Button("OK") { }
+            } message: {
+                Text("Terima kasih atas laporanmu. Tim kami akan meninjau laporan ini dan mengambil tindakan yang sesuai.")
             }
         }
     }

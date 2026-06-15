@@ -4,6 +4,7 @@ import FirebaseFirestore
 // MARK: - Notification Type
 enum AppNotificationType: String, Codable {
     case tripInvite      = "tripInvite"
+    case tripEnded       = "tripEnded"
     case friendRequest   = "friendRequest"
     case expenseAdded    = "expenseAdded"
     case settlementProof = "settlementProof"
@@ -29,6 +30,7 @@ struct NotificationModel: Identifiable, Codable {
     var icon: String {
         switch type {
         case .tripInvite:      return "airplane.circle.fill"
+        case .tripEnded:       return "flag.pattern.checkered"
         case .friendRequest:   return "person.badge.plus.fill"
         case .expenseAdded:    return "dollarsign.circle.fill"
         case .settlementProof: return "banknote.fill"

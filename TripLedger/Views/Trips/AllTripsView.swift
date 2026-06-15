@@ -10,6 +10,7 @@ struct AllTripsView: View {
 
     enum TripFilter: String, CaseIterable {
         case all      = "Semua"
+        case planned  = "Direncanakan"
         case active   = "Aktif"
         case finished = "Selesai"
     }
@@ -17,7 +18,8 @@ struct AllTripsView: View {
     private var filteredTrips: [TripModel] {
         let baseList: [TripModel]
         switch selectedFilter {
-        case .all:      baseList = tripVM.activeTrips + tripVM.historyTrips
+        case .all:      baseList = tripVM.plannedTrips + tripVM.activeTrips + tripVM.historyTrips
+        case .planned:  baseList = tripVM.plannedTrips
         case .active:   baseList = tripVM.activeTrips
         case .finished: baseList = tripVM.historyTrips
         }
@@ -47,7 +49,6 @@ struct AllTripsView: View {
 
                 // MARK: - Filter Tabs
                 filterTabs
-                    .padding(.horizontal, 20)
                     .padding(.top, 12)
                     .padding(.bottom, 8)
 
@@ -72,7 +73,7 @@ struct AllTripsView: View {
             }
         }
         .navigationTitle("Semua Trip")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: - Search Bar
@@ -102,24 +103,26 @@ struct AllTripsView: View {
 
     // MARK: - Filter Tabs
     private var filterTabs: some View {
-        HStack(spacing: 8) {
-            ForEach(TripFilter.allCases, id: \.self) { filter in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedFilter = filter
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(TripFilter.allCases, id: \.self) { filter in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedFilter = filter
+                        }
+                    } label: {
+                        Text(filter.rawValue)
+                            .font(AppFont.subheadline())
+                            .foregroundColor(selectedFilter == filter ? .white : .textPrimary.opacity(0.55))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(selectedFilter == filter ? Color.brandPrimary : Color.textPrimary.opacity(0.06))
+                            .clipShape(Capsule())
                     }
-                } label: {
-                    Text(filter.rawValue)
-                        .font(AppFont.subheadline())
-                        .foregroundColor(selectedFilter == filter ? .white : .textPrimary.opacity(0.55))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(selectedFilter == filter ? Color.brandPrimary : Color.textPrimary.opacity(0.06))
-                        .clipShape(Capsule())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
-            Spacer()
+            .padding(.horizontal, 20)
         }
     }
 

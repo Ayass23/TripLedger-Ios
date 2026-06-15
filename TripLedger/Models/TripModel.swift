@@ -3,6 +3,7 @@ import FirebaseFirestore
 
 // MARK: - Trip Status
 enum TripStatus: String, Codable {
+    case planned  = "planned"
     case active   = "active"
     case finished = "finished"
     case deleted  = "deleted"

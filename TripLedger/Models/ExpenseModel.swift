@@ -99,6 +99,7 @@ struct ExpenseModel: Identifiable, Codable, Equatable {
     var category:    ExpenseCategory
     var paidByUID:   String
     var paidByName:  String
+    var paidByBankAccount: String?  // Optional bank account of the person who paid
     var splitType:   SplitType
     var splits:      [ExpenseSplit]
     var notes:       String?
@@ -108,6 +109,6 @@ struct ExpenseModel: Identifiable, Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id, tripID, title, amount, currency, category, paidByUID,
-             paidByName, splitType, splits, notes, receiptURL, createdAt, updatedAt
+             paidByName, paidByBankAccount, splitType, splits, notes, receiptURL, createdAt, updatedAt
     }
 }

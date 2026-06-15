@@ -1,0 +1,354 @@
+[debug] [2026-06-14T15:03:34.142Z] ----------------------------------------------------------------------
+[debug] [2026-06-14T15:03:34.143Z] Command:       /opt/homebrew/Cellar/node/24.7.0/bin/node /opt/homebrew/bin/firebase deploy --only functions
+[debug] [2026-06-14T15:03:34.144Z] CLI Version:   14.7.0
+[debug] [2026-06-14T15:03:34.144Z] Platform:      darwin
+[debug] [2026-06-14T15:03:34.144Z] Node Version:  v24.7.0
+[debug] [2026-06-14T15:03:34.144Z] Time:          Sun Jun 14 2026 22:03:34 GMT+0700 (Western Indonesia Time)
+[debug] [2026-06-14T15:03:34.144Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-06-14T15:03:34.199Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-06-14T15:03:34.200Z] > authorizing via signed-in user (andreasmargono.17@gmail.com)
+[debug] [2026-06-14T15:03:34.200Z] [iam] checking project trip-ledger-d91ba for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-06-14T15:03:34.200Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:34.200Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:34.200Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions [none]
+[debug] [2026-06-14T15:03:34.200Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:34.200Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-06-14T15:03:34.936Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions 200
+[debug] [2026-06-14T15:03:34.937Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-06-14T15:03:34.937Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:34.937Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:34.937Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/trip-ledger-d91ba/serviceAccounts/trip-ledger-d91ba@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2026-06-14T15:03:34.937Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/trip-ledger-d91ba/serviceAccounts/trip-ledger-d91ba@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2026-06-14T15:03:36.740Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/trip-ledger-d91ba/serviceAccounts/trip-ledger-d91ba@appspot.gserviceaccount.com:testIamPermissions 404
+[debug] [2026-06-14T15:03:36.740Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/trip-ledger-d91ba/serviceAccounts/trip-ledger-d91ba@appspot.gserviceaccount.com:testIamPermissions {"error":{"code":404,"message":"Unknown service account","status":"NOT_FOUND"}}
+[debug] [2026-06-14T15:03:36.740Z] [functions] service account IAM check errored, deploy may fail: Request to https://iam.googleapis.com/v1/projects/trip-ledger-d91ba/serviceAccounts/trip-ledger-d91ba@appspot.gserviceaccount.com:testIamPermissions had HTTP Error: 404, Unknown service account {"name":"FirebaseError","children":[],"context":{"body":{"error":{"code":404,"message":"Unknown service account","status":"NOT_FOUND"}},"response":{"statusCode":404}},"exit":1,"message":"Request to https://iam.googleapis.com/v1/projects/trip-ledger-d91ba/serviceAccounts/trip-ledger-d91ba@appspot.gserviceaccount.com:testIamPermissions had HTTP Error: 404, Unknown service account","status":404}
+[info] 
+[info] === Deploying to 'trip-ledger-d91ba'...
+[info] 
+[info] i  deploying functions 
+[debug] [2026-06-14T15:03:36.744Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:36.744Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:36.744Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudresourcemanager.googleapis.com [none]
+[debug] [2026-06-14T15:03:36.744Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudresourcemanager.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:38.846Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudresourcemanager.googleapis.com 200
+[debug] [2026-06-14T15:03:38.846Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudresourcemanager.googleapis.com [omitted]
+[debug] [2026-06-14T15:03:38.847Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:38.847Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:38.847Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba [none]
+[debug] [2026-06-14T15:03:39.296Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba 200
+[debug] [2026-06-14T15:03:39.297Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba {"projectNumber":"185437647118","projectId":"trip-ledger-d91ba","lifecycleState":"ACTIVE","name":"Trip Ledger","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-04-14T08:53:16.850Z"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[debug] [2026-06-14T15:03:39.298Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:39.298Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:39.298Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:39.298Z] Checked if tokens are valid: true, expires at: 1781452838315
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[debug] [2026-06-14T15:03:39.299Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:39.299Z] Checked if tokens are valid: true, expires at: 1781452838315
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2026-06-14T15:03:39.299Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:39.299Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:39.299Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-06-14T15:03:39.299Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:39.300Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/runtimeconfig.googleapis.com [none]
+[debug] [2026-06-14T15:03:39.300Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/runtimeconfig.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:39.301Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com [none]
+[debug] [2026-06-14T15:03:39.301Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:39.302Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com [none]
+[debug] [2026-06-14T15:03:39.302Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:39.782Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com 200
+[debug] [2026-06-14T15:03:39.782Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com [omitted]
+[warn] ⚠  functions: missing required API cloudfunctions.googleapis.com. Enabling now... 
+[debug] [2026-06-14T15:03:39.784Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:39.784Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:39.784Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com:enable [none]
+[debug] [2026-06-14T15:03:39.784Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com:enable x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:40.834Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/runtimeconfig.googleapis.com 200
+[debug] [2026-06-14T15:03:40.834Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/runtimeconfig.googleapis.com [omitted]
+[debug] [2026-06-14T15:03:40.835Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com 200
+[debug] [2026-06-14T15:03:40.835Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com [omitted]
+[warn] ⚠  functions: missing required API cloudbuild.googleapis.com. Enabling now... 
+[debug] [2026-06-14T15:03:40.836Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:40.836Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:40.836Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com:enable [none]
+[debug] [2026-06-14T15:03:40.836Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com:enable x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:40.894Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com 200
+[debug] [2026-06-14T15:03:40.894Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com [omitted]
+[warn] ⚠  artifactregistry: missing required API artifactregistry.googleapis.com. Enabling now... 
+[debug] [2026-06-14T15:03:40.894Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:40.894Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:40.894Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com:enable [none]
+[debug] [2026-06-14T15:03:40.894Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com:enable x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:41.394Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com:enable 200
+[debug] [2026-06-14T15:03:41.394Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com:enable [omitted]
+[debug] [2026-06-14T15:03:41.397Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com:enable 200
+[debug] [2026-06-14T15:03:41.397Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com:enable [omitted]
+[debug] [2026-06-14T15:03:41.417Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com:enable 200
+[debug] [2026-06-14T15:03:41.417Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com:enable [omitted]
+[debug] [2026-06-14T15:03:51.396Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:51.397Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:51.397Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com [none]
+[debug] [2026-06-14T15:03:51.397Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:51.400Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:51.400Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:51.400Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-06-14T15:03:51.400Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:51.418Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:51.418Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:03:51.419Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com [none]
+[debug] [2026-06-14T15:03:51.419Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:03:53.016Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com 200
+[debug] [2026-06-14T15:03:53.016Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/artifactregistry.googleapis.com [omitted]
+[info] ✔  artifactregistry: required API artifactregistry.googleapis.com is enabled 
+[debug] [2026-06-14T15:03:53.058Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com 200
+[debug] [2026-06-14T15:03:53.058Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com [omitted]
+[info] i  functions: waiting for API cloudfunctions.googleapis.com to activate... 
+[debug] [2026-06-14T15:03:53.193Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com 200
+[debug] [2026-06-14T15:03:53.193Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudbuild.googleapis.com [omitted]
+[info] ✔  functions: required API cloudbuild.googleapis.com is enabled 
+[debug] [2026-06-14T15:04:03.059Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:03.060Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:03.060Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-06-14T15:04:03.060Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:04:04.757Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com 200
+[debug] [2026-06-14T15:04:04.757Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudfunctions.googleapis.com [omitted]
+[info] ✔  functions: required API cloudfunctions.googleapis.com is enabled 
+[debug] [2026-06-14T15:04:04.760Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:04.760Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:04.761Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/trip-ledger-d91ba/adminSdkConfig [none]
+[debug] [2026-06-14T15:04:05.982Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/trip-ledger-d91ba/adminSdkConfig 200
+[debug] [2026-06-14T15:04:05.983Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/trip-ledger-d91ba/adminSdkConfig {"projectId":"trip-ledger-d91ba","storageBucket":"trip-ledger-d91ba.firebasestorage.app"}
+[debug] [2026-06-14T15:04:05.983Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:05.983Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:05.983Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/trip-ledger-d91ba/configs [none]
+[debug] [2026-06-14T15:04:07.661Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/trip-ledger-d91ba/configs 200
+[debug] [2026-06-14T15:04:07.661Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/trip-ledger-d91ba/configs {}
+[debug] [2026-06-14T15:04:07.665Z] Validating nodejs source
+[warn] ⚠  functions: Runtime Node.js 20 was deprecated on 2026-04-30 and will be decommissioned on 2026-10-30, after which you will not be able to deploy without upgrading. Consider upgrading now to avoid disruption. See https://cloud.google.com/functions/docs/runtime-support for full details on the lifecycle policy 
+[warn] ⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+[warn] ⚠  functions: Please note that there will be breaking changes when you upgrade. 
+[debug] [2026-06-14T15:04:08.730Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for TripLedger",
+  "scripts": {
+    "lint": "eslint --ext .js,.ts .",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^5.0.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.12.0",
+    "@typescript-eslint/parser": "^5.12.0",
+    "eslint": "^8.9.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.25.4",
+    "typescript": "^4.9.0"
+  },
+  "private": true
+}
+[debug] [2026-06-14T15:04:08.730Z] Building nodejs source
+[info] i  functions: Loading and analyzing source code for codebase default to determine what to deploy 
+[debug] [2026-06-14T15:04:08.730Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-06-14T15:04:08.735Z] Found firebase-functions binary at '/Users/ayas/Documents/Andreas/Skripsi/App/New-App/TripLedger/functions/node_modules/.bin/firebase-functions'
+[info] Serving at port 8181
+
+[debug] [2026-06-14T15:04:09.246Z] Got response from /__/functions.yaml {"endpoints":{"dailyTripStatusCheck":{"platform":"gcfv1","availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"serviceAccountEmail":null,"vpc":null,"scheduleTrigger":{"schedule":"0 3 * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetryDuration":null,"maxBackoffDuration":null,"minBackoffDuration":null},"timeZone":"Asia/Jakarta"},"labels":{},"entryPoint":"dailyTripStatusCheck"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[info] i  extensions: ensuring required API firebaseextensions.googleapis.com is enabled... 
+[debug] [2026-06-14T15:04:13.265Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:13.265Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:13.265Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com [none]
+[debug] [2026-06-14T15:04:13.265Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:04:15.076Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com 200
+[debug] [2026-06-14T15:04:15.076Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com [omitted]
+[warn] ⚠  extensions: missing required API firebaseextensions.googleapis.com. Enabling now... 
+[debug] [2026-06-14T15:04:15.076Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:15.076Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:15.076Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com:enable [none]
+[debug] [2026-06-14T15:04:15.076Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com:enable x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:04:15.663Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com:enable 200
+[debug] [2026-06-14T15:04:15.664Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com:enable [omitted]
+[debug] [2026-06-14T15:04:25.666Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:25.666Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:25.667Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com [none]
+[debug] [2026-06-14T15:04:25.667Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:04:29.081Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com 200
+[debug] [2026-06-14T15:04:29.081Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/firebaseextensions.googleapis.com [omitted]
+[info] ✔  extensions: required API firebaseextensions.googleapis.com is enabled 
+[debug] [2026-06-14T15:04:29.085Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-06-14T15:04:29.085Z] > authorizing via signed-in user (andreasmargono.17@gmail.com)
+[debug] [2026-06-14T15:04:29.086Z] [iam] checking project trip-ledger-d91ba for permissions ["firebase.projects.get","firebaseextensions.instances.list"]
+[debug] [2026-06-14T15:04:29.086Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:29.086Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:04:29.087Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions [none]
+[debug] [2026-06-14T15:04:29.087Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:04:29.087Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions {"permissions":["firebase.projects.get","firebaseextensions.instances.list"]}
+[debug] [2026-06-14T15:05:44.850Z] *** [apiv2] error from fetch(https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions, {"headers":{},"method":"POST","body":"{\"permissions\":[\"firebase.projects.get\",\"firebaseextensions.instances.list\"]}"}): FetchError: request to https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions failed, reason: 
+[debug] [2026-06-14T15:05:44.851Z] [iam] error while checking permissions, command may fail: Failed to make request to https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba:testIamPermissions
+[debug] [2026-06-14T15:05:44.852Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:44.852Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:44.854Z] >>> [apiv2][query] GET https://firebaseextensions.googleapis.com/v1beta/projects/trip-ledger-d91ba/instances pageSize=100&pageToken=
+[debug] [2026-06-14T15:05:47.920Z] <<< [apiv2][status] GET https://firebaseextensions.googleapis.com/v1beta/projects/trip-ledger-d91ba/instances 200
+[debug] [2026-06-14T15:05:47.921Z] <<< [apiv2][body] GET https://firebaseextensions.googleapis.com/v1beta/projects/trip-ledger-d91ba/instances {}
+[info] i  functions: preparing functions directory for uploading... 
+[info] i  functions: packaged /Users/ayas/Documents/Andreas/Skripsi/App/New-App/TripLedger/functions (66.18 KB) for uploading 
+[debug] [2026-06-14T15:05:47.941Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:47.941Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:47.941Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/-/functions [none]
+[debug] [2026-06-14T15:05:48.944Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/-/functions 200
+[debug] [2026-06-14T15:05:48.945Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/-/functions {}
+[debug] [2026-06-14T15:05:48.945Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:48.945Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:48.945Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v2/projects/trip-ledger-d91ba/locations/-/functions filter=environment%3D%22GEN_2%22
+[debug] [2026-06-14T15:05:52.818Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v2/projects/trip-ledger-d91ba/locations/-/functions 200
+[debug] [2026-06-14T15:05:52.818Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v2/projects/trip-ledger-d91ba/locations/-/functions {}
+[info] i  functions: ensuring required API cloudscheduler.googleapis.com is enabled... 
+[debug] [2026-06-14T15:05:52.821Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:52.821Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:52.821Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com [none]
+[debug] [2026-06-14T15:05:52.821Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com x-goog-quota-user=projects/185437647118
+[debug] [2026-06-14T15:05:54.405Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com 200
+[debug] [2026-06-14T15:05:54.405Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com [omitted]
+[warn] ⚠  functions: missing required API cloudscheduler.googleapis.com. Enabling now... 
+[debug] [2026-06-14T15:05:54.405Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:54.405Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:05:54.405Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com:enable [none]
+[debug] [2026-06-14T15:05:54.406Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com:enable x-goog-quota-user=projects/185437647118
+[debug] [2026-06-14T15:05:55.200Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com:enable 200
+[debug] [2026-06-14T15:05:55.200Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com:enable [omitted]
+[debug] [2026-06-14T15:06:05.201Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:05.202Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:05.202Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com [none]
+[debug] [2026-06-14T15:06:05.202Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com x-goog-quota-user=projects/185437647118
+[debug] [2026-06-14T15:06:07.116Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com 200
+[debug] [2026-06-14T15:06:07.117Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/185437647118/services/cloudscheduler.googleapis.com [omitted]
+[info] ✔  functions: required API cloudscheduler.googleapis.com is enabled 
+[debug] [2026-06-14T15:06:07.121Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:07.121Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:07.121Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudresourcemanager.googleapis.com [none]
+[debug] [2026-06-14T15:06:07.121Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudresourcemanager.googleapis.com x-goog-quota-user=projects/trip-ledger-d91ba
+[debug] [2026-06-14T15:06:07.528Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudresourcemanager.googleapis.com 200
+[debug] [2026-06-14T15:06:07.529Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/trip-ledger-d91ba/services/cloudresourcemanager.googleapis.com [omitted]
+[debug] [2026-06-14T15:06:07.529Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:07.529Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:07.529Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba [none]
+[debug] [2026-06-14T15:06:08.029Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba 200
+[debug] [2026-06-14T15:06:08.030Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/trip-ledger-d91ba {"projectNumber":"185437647118","projectId":"trip-ledger-d91ba","lifecycleState":"ACTIVE","name":"Trip Ledger","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-04-14T08:53:16.850Z"}
+[debug] [2026-06-14T15:06:08.031Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:08.031Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:08.031Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/trip-ledger-d91ba/billingInfo [none]
+[debug] [2026-06-14T15:06:10.003Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/trip-ledger-d91ba/billingInfo 200
+[debug] [2026-06-14T15:06:10.003Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/trip-ledger-d91ba/billingInfo {"name":"projects/trip-ledger-d91ba/billingInfo","projectId":"trip-ledger-d91ba","billingAccountName":"billingAccounts/01C7BA-08FE0E-9D9F44","billingEnabled":true}
+[debug] [2026-06-14T15:06:10.006Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:10.006Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:10.006Z] >>> [apiv2][query] POST https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/functions:generateUploadUrl [none]
+[debug] [2026-06-14T15:06:10.006Z] >>> [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/functions:generateUploadUrl {}
+[debug] [2026-06-14T15:06:18.446Z] <<< [apiv2][status] POST https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/functions:generateUploadUrl 200
+[debug] [2026-06-14T15:06:18.446Z] <<< [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/functions:generateUploadUrl {"uploadUrl":"https://storage.googleapis.com/uploads-482972013578.us-central1.cloudfunctions.appspot.com/4e5550fd-f40d-4254-8639-b6617e98ae03.zip?GoogleAccessId=service-185437647118@gcf-admin-robot.iam.gserviceaccount.com&Expires=1781451378&Signature=M3d5R5D6Hb%2BOp3cphoUPUa2dq0Z7x4qdX0dOCnYLfru6wnf61XnzkjHuBE89whrSad7ar7GSQxNRjDZyg0%2BBNV64sG7Cb8lc0FdxQ%2FbC2wsPTulFRDrNdTiQZ%2Fxs4axmJTIJhoi89cF9FlnDg6qwVDHSFEUB1z0WX49p%2FIrPMQfo%2BQgEbuav3kuYsBo2Z2URhdSJx65doi%2BWfYItULm%2F5gZ9sdBDzSmkQR%2FdFfzaU1EtQWG1BcdK9T%2BcTCVYr6A4xkdICDjvsvoiDrjMdAKG8PtAQJZJzURl4zkKG97DVPNv1LORGAv%2BVVIHm38l8ellXOjaxnxo54i%2Fu%2F1Bsqggig%3D%3D"}
+[debug] [2026-06-14T15:06:18.447Z] >>> [apiv2][query] PUT https://storage.googleapis.com/uploads-482972013578.us-central1.cloudfunctions.appspot.com/4e5550fd-f40d-4254-8639-b6617e98ae03.zip GoogleAccessId=service-185437647118%40gcf-admin-robot.iam.gserviceaccount.com&Expires=1781451378&Signature=M3d5R5D6Hb%2BOp3cphoUPUa2dq0Z7x4qdX0dOCnYLfru6wnf61XnzkjHuBE89whrSad7ar7GSQxNRjDZyg0%2BBNV64sG7Cb8lc0FdxQ%2FbC2wsPTulFRDrNdTiQZ%2Fxs4axmJTIJhoi89cF9FlnDg6qwVDHSFEUB1z0WX49p%2FIrPMQfo%2BQgEbuav3kuYsBo2Z2URhdSJx65doi%2BWfYItULm%2F5gZ9sdBDzSmkQR%2FdFfzaU1EtQWG1BcdK9T%2BcTCVYr6A4xkdICDjvsvoiDrjMdAKG8PtAQJZJzURl4zkKG97DVPNv1LORGAv%2BVVIHm38l8ellXOjaxnxo54i%2Fu%2F1Bsqggig%3D%3D
+[debug] [2026-06-14T15:06:18.447Z] >>> [apiv2][body] PUT https://storage.googleapis.com/uploads-482972013578.us-central1.cloudfunctions.appspot.com/4e5550fd-f40d-4254-8639-b6617e98ae03.zip [stream]
+[debug] [2026-06-14T15:06:19.804Z] <<< [apiv2][status] PUT https://storage.googleapis.com/uploads-482972013578.us-central1.cloudfunctions.appspot.com/4e5550fd-f40d-4254-8639-b6617e98ae03.zip 200
+[debug] [2026-06-14T15:06:19.805Z] <<< [apiv2][body] PUT https://storage.googleapis.com/uploads-482972013578.us-central1.cloudfunctions.appspot.com/4e5550fd-f40d-4254-8639-b6617e98ae03.zip [omitted]
+[info] ✔  functions: functions folder uploaded successfully 
+[info] i  functions: creating Node.js 20 (1st Gen) function dailyTripStatusCheck(us-central1)... 
+[debug] [2026-06-14T15:06:19.810Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:19.810Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:19.810Z] >>> [apiv2][query] POST https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/functions [none]
+[debug] [2026-06-14T15:06:19.810Z] >>> [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/functions {"name":"projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck","sourceUploadUrl":"https://storage.googleapis.com/uploads-482972013578.us-central1.cloudfunctions.appspot.com/4e5550fd-f40d-4254-8639-b6617e98ae03.zip?GoogleAccessId=service-185437647118@gcf-admin-robot.iam.gserviceaccount.com&Expires=1781451378&Signature=M3d5R5D6Hb%2BOp3cphoUPUa2dq0Z7x4qdX0dOCnYLfru6wnf61XnzkjHuBE89whrSad7ar7GSQxNRjDZyg0%2BBNV64sG7Cb8lc0FdxQ%2FbC2wsPTulFRDrNdTiQZ%2Fxs4axmJTIJhoi89cF9FlnDg6qwVDHSFEUB1z0WX49p%2FIrPMQfo%2BQgEbuav3kuYsBo2Z2URhdSJx65doi%2BWfYItULm%2F5gZ9sdBDzSmkQR%2FdFfzaU1EtQWG1BcdK9T%2BcTCVYr6A4xkdICDjvsvoiDrjMdAKG8PtAQJZJzURl4zkKG97DVPNv1LORGAv%2BVVIHm38l8ellXOjaxnxo54i%2Fu%2F1Bsqggig%3D%3D","entryPoint":"dailyTripStatusCheck","runtime":"nodejs20","dockerRegistry":"ARTIFACT_REGISTRY","labels":{"deployment-tool":"cli-firebase","deployment-scheduled":"true","firebase-functions-hash":"e648847c183ca9880e1829ecefa0010f6c07addb"},"eventTrigger":{"eventType":"google.pubsub.topic.publish","resource":"projects/trip-ledger-d91ba/topics/firebase-schedule-dailyTripStatusCheck-us-central1"},"minInstances":null,"maxInstances":null,"ingressSettings":null,"environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"trip-ledger-d91ba\",\"storageBucket\":\"trip-ledger-d91ba.firebasestorage.app\"}","GCLOUD_PROJECT":"trip-ledger-d91ba","EVENTARC_CLOUD_EVENT_SOURCE":"projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck"},"serviceAccountEmail":null,"availableMemoryMb":null,"timeout":null,"vpcConnector":null,"vpcConnectorEgressSettings":null,"buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""}}
+[debug] [2026-06-14T15:06:22.072Z] <<< [apiv2][status] POST https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/functions 200
+[debug] [2026-06-14T15:06:22.072Z] <<< [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/functions {"name":"operations/cHJvamVjdHMvdHJpcC1sZWRnZXItZDkxYmEvbG9jYXRpb25zL3VzLWNlbnRyYWwxL29wZXJhdGlvbnMvb3BlcmF0aW9uLTE3ODE0NDk1ODAyMjUtNjU0MzgwZDZhMjJmZi0xNThkOWEwNC0xYTQyNjVkOQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck","updateTime":"2026-06-14T15:06:21.943003604Z"}}
+[debug] [2026-06-14T15:06:22.073Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:22.073Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:22.074Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/cHJvamVjdHMvdHJpcC1sZWRnZXItZDkxYmEvbG9jYXRpb25zL3VzLWNlbnRyYWwxL29wZXJhdGlvbnMvb3BlcmF0aW9uLTE3ODE0NDk1ODAyMjUtNjU0MzgwZDZhMjJmZi0xNThkOWEwNC0xYTQyNjVkOQ [none]
+[debug] [2026-06-14T15:06:23.417Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/cHJvamVjdHMvdHJpcC1sZWRnZXItZDkxYmEvbG9jYXRpb25zL3VzLWNlbnRyYWwxL29wZXJhdGlvbnMvb3BlcmF0aW9uLTE3ODE0NDk1ODAyMjUtNjU0MzgwZDZhMjJmZi0xNThkOWEwNC0xYTQyNjVkOQ 200
+[debug] [2026-06-14T15:06:23.418Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/cHJvamVjdHMvdHJpcC1sZWRnZXItZDkxYmEvbG9jYXRpb25zL3VzLWNlbnRyYWwxL29wZXJhdGlvbnMvb3BlcmF0aW9uLTE3ODE0NDk1ODAyMjUtNjU0MzgwZDZhMjJmZi0xNThkOWEwNC0xYTQyNjVkOQ {"name":"operations/cHJvamVjdHMvdHJpcC1sZWRnZXItZDkxYmEvbG9jYXRpb25zL3VzLWNlbnRyYWwxL29wZXJhdGlvbnMvb3BlcmF0aW9uLTE3ODE0NDk1ODAyMjUtNjU0MzgwZDZhMjJmZi0xNThkOWEwNC0xYTQyNjVkOQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck","eventTrigger":{"eventType":"google.pubsub.topic.publish","resource":"projects/trip-ledger-d91ba/topics/firebase-schedule-dailyTripStatusCheck-us-central1","failurePolicy":{}},"entryPoint":"dailyTripStatusCheck","updateTime":"1970-01-01T00:00:00Z","labels":{"deployment-tool":"cli-firebase","deployment-scheduled":"true","firebase-functions-hash":"e648847c183ca9880e1829ecefa0010f6c07addb"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-482972013578.us-central1.cloudfunctions.appspot.com/4e5550fd-f40d-4254-8639-b6617e98ae03.zip?GoogleAccessId=service-185437647118@gcf-admin-robot.iam.gserviceaccount.com&Expires=1781451378&Signature=M3d5R5D6Hb%2BOp3cphoUPUa2dq0Z7x4qdX0dOCnYLfru6wnf61XnzkjHuBE89whrSad7ar7GSQxNRjDZyg0%2BBNV64sG7Cb8lc0FdxQ%2FbC2wsPTulFRDrNdTiQZ%2Fxs4axmJTIJhoi89cF9FlnDg6qwVDHSFEUB1z0WX49p%2FIrPMQfo%2BQgEbuav3kuYsBo2Z2URhdSJx65doi%2BWfYItULm%2F5gZ9sdBDzSmkQR%2FdFfzaU1EtQWG1BcdK9T%2BcTCVYr6A4xkdICDjvsvoiDrjMdAKG8PtAQJZJzURl4zkKG97DVPNv1LORGAv%2BVVIHm38l8ellXOjaxnxo54i%2Fu%2F1Bsqggig%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"trip-ledger-d91ba\",\"storageBucket\":\"trip-ledger-d91ba.firebasestorage.app\"}","GCLOUD_PROJECT":"trip-ledger-d91ba","EVENTARC_CLOUD_EVENT_SOURCE":"projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck"},"runtime":"nodejs20","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"updateTime":"2026-06-14T15:06:22.534116063Z"},"done":true,"error":{"code":9,"message":"Failed to create 1st Gen function projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck: Default service account '185437647118-compute@developer.gserviceaccount.com' doesn't exist. Please recreate this account or specify a different account. Please visit https://cloud.google.com/functions/docs/troubleshooting for in-depth troubleshooting documentation."}}
+[debug] [2026-06-14T15:06:23.418Z] Got source token undefined for region us-central1
+[error] Failed to create 1st Gen function projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck: Default service account '185437647118-compute@developer.gserviceaccount.com' doesn't exist. Please recreate this account or specify a different account. Please visit https://cloud.google.com/functions/docs/troubleshooting for in-depth troubleshooting documentation.
+[debug] [2026-06-14T15:06:23.423Z] Total Function Deployment time: 3610
+[debug] [2026-06-14T15:06:23.423Z] 1 Functions Deployed
+[debug] [2026-06-14T15:06:23.423Z] 1 Functions Errored
+[debug] [2026-06-14T15:06:23.423Z] 0 Function Deployments Aborted
+[debug] [2026-06-14T15:06:23.423Z] Average Function Deployment time: 3610
+[info] 
+[info] Functions deploy had errors with the following functions:
+	dailyTripStatusCheck(us-central1)
+[debug] [2026-06-14T15:06:24.041Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:24.041Z] Checked if tokens are valid: true, expires at: 1781452838315
+[debug] [2026-06-14T15:06:24.041Z] >>> [apiv2][query] GET https://artifactregistry.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/repositories/gcf-artifacts [none]
+[debug] [2026-06-14T15:06:25.976Z] <<< [apiv2][status] GET https://artifactregistry.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/repositories/gcf-artifacts 404
+[debug] [2026-06-14T15:06:25.977Z] <<< [apiv2][body] GET https://artifactregistry.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/repositories/gcf-artifacts {"error":{"code":404,"message":"Requested entity was not found.","status":"NOT_FOUND"}}
+[debug] [2026-06-14T15:06:25.978Z] Failed to check artifact cleanup policy for region us-central1: Request to https://artifactregistry.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/repositories/gcf-artifacts had HTTP Error: 404, Requested entity was not found. {"name":"FirebaseError","children":[],"context":{"body":{"error":{"code":404,"message":"Requested entity was not found.","status":"NOT_FOUND"}},"response":{"statusCode":404}},"exit":1,"message":"Request to https://artifactregistry.googleapis.com/v1/projects/trip-ledger-d91ba/locations/us-central1/repositories/gcf-artifacts had HTTP Error: 404, Requested entity was not found.","status":404}
+[debug] [2026-06-14T15:06:25.978Z] Functions deploy failed.
+[debug] [2026-06-14T15:06:25.978Z] {
+  "endpoint": {
+    "id": "dailyTripStatusCheck",
+    "project": "trip-ledger-d91ba",
+    "region": "us-central1",
+    "entryPoint": "dailyTripStatusCheck",
+    "platform": "gcfv1",
+    "runtime": "nodejs20",
+    "scheduleTrigger": {
+      "schedule": "0 3 * * *",
+      "timeZone": "Asia/Jakarta",
+      "retryConfig": {
+        "maxBackoffSeconds": null,
+        "minBackoffSeconds": null,
+        "maxRetrySeconds": null,
+        "retryCount": null,
+        "maxDoublings": null
+      }
+    },
+    "labels": {
+      "deployment-tool": "cli-firebase"
+    },
+    "serviceAccount": null,
+    "ingressSettings": null,
+    "availableMemoryMb": null,
+    "timeoutSeconds": null,
+    "maxInstances": null,
+    "minInstances": null,
+    "vpc": null,
+    "environmentVariables": {
+      "FIREBASE_CONFIG": "{\"projectId\":\"trip-ledger-d91ba\",\"storageBucket\":\"trip-ledger-d91ba.firebasestorage.app\"}",
+      "GCLOUD_PROJECT": "trip-ledger-d91ba",
+      "EVENTARC_CLOUD_EVENT_SOURCE": "projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck"
+    },
+    "codebase": "default",
+    "targetedByOnly": false,
+    "hash": "e648847c183ca9880e1829ecefa0010f6c07addb"
+  },
+  "op": "create",
+  "original": {
+    "name": "FirebaseError",
+    "children": [],
+    "exit": 1,
+    "message": "Failed to create 1st Gen function projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck: Default service account '185437647118-compute@developer.gserviceaccount.com' doesn't exist. Please recreate this account or specify a different account. Please visit https://cloud.google.com/functions/docs/troubleshooting for in-depth troubleshooting documentation.",
+    "original": {
+      "code": 9,
+      "message": "Failed to create 1st Gen function projects/trip-ledger-d91ba/locations/us-central1/functions/dailyTripStatusCheck: Default service account '185437647118-compute@developer.gserviceaccount.com' doesn't exist. Please recreate this account or specify a different account. Please visit https://cloud.google.com/functions/docs/troubleshooting for in-depth troubleshooting documentation."
+    },
+    "status": 9,
+    "code": 9
+  }
+}
+[debug] [2026-06-14T15:06:26.121Z] Error: Failed to create function dailyTripStatusCheck in region us-central1
+    at /opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:52:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Fabricator.createV1Function (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:182:32)
+    at async Fabricator.createEndpoint (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:134:13)
+    at async handle (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:89:17)
+[error] 
+[error] Error: There was an error deploying functions

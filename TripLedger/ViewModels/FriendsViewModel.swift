@@ -7,7 +7,8 @@ final class FriendsViewModel: ObservableObject {
 
     @Published var friends:        [UserModel]      = []
     @Published var searchResults:  [UserModel]      = []
-    @Published var pendingRequests:[FriendRequest]  = []
+    @Published var pendingRequests:[FriendRequest]  = []  // Incoming requests
+    @Published var outgoingRequests:[FriendRequest] = []  // Outgoing requests
     @Published var isLoading       = false
     @Published var errorMessage:   String?
 
@@ -36,36 +37,72 @@ final class FriendsViewModel: ObservableObject {
             searchResults = []
             return
         }
-        
+
         isLoading = true
         defer { isLoading = false }
-        
+
         do {
-            // Search by email prefix (case-insensitive assuming emails are stored lowercase)
             let lowerQuery = query.lowercased()
+
+            // Search by email prefix (case-insensitive)
             let byEmail: [UserModel] = try await db.fetchList(collection: Collection.users) { ref in
                 ref.whereField("email", isGreaterThanOrEqualTo: lowerQuery)
                    .whereField("email", isLessThan: lowerQuery + "\u{f8ff}")
                    .limit(to: 10)
             }
-            
-            async let byName: [UserModel] = db.fetchList(collection: Collection.users) { ref in
+
+            // Search by name - try both lowercase and capitalized first letter
+            let capitalizedQuery = query.prefix(1).uppercased() + query.dropFirst().lowercased()
+
+            async let byNameLower: [UserModel] = db.fetchList(collection: Collection.users) { ref in
+                ref.whereField("displayName", isGreaterThanOrEqualTo: lowerQuery)
+                    .whereField("displayName", isLessThan: lowerQuery + "\u{f8ff}")
+                    .limit(to: 10)
+            }
+
+            async let byNameCapital: [UserModel] = db.fetchList(collection: Collection.users) { ref in
+                ref.whereField("displayName", isGreaterThanOrEqualTo: capitalizedQuery)
+                    .whereField("displayName", isLessThan: capitalizedQuery + "\u{f8ff}")
+                    .limit(to: 10)
+            }
+
+            async let byNameOriginal: [UserModel] = db.fetchList(collection: Collection.users) { ref in
                 ref.whereField("displayName", isGreaterThanOrEqualTo: query)
                     .whereField("displayName", isLessThan: query + "\u{f8ff}")
                     .limit(to: 10)
             }
-            
-            // Run both queries in parallel
-            let (emailResults, nameResults) = try await (byEmail, byName)
-            
-            // Merge + remove duplicates
-            let combined = emailResults + nameResults
+
+            // Run all queries in parallel
+            let (emailResults, nameLowerResults, nameCapitalResults, nameOriginalResults) =
+                try await (byEmail, byNameLower, byNameCapital, byNameOriginal)
+
+            // Merge all results and remove duplicates
+            let combined = emailResults + nameLowerResults + nameCapitalResults + nameOriginalResults
             let uniqueUsers = Dictionary(grouping: combined, by: { $0.uid })
                 .compactMap { $0.value.first }
-            
-            // Filter out current user
-            searchResults = uniqueUsers.filter { $0.uid != currentUID }
-            
+
+            // Filter out current user and sort by relevance
+            searchResults = uniqueUsers
+                .filter { $0.uid != currentUID }
+                .sorted { user1, user2 in
+                    // Prioritize exact matches (case-insensitive)
+                    let name1Lower = user1.displayName.lowercased()
+                    let name2Lower = user2.displayName.lowercased()
+
+                    if name1Lower == lowerQuery && name2Lower != lowerQuery { return true }
+                    if name2Lower == lowerQuery && name1Lower != lowerQuery { return false }
+
+                    // Then prioritize starts with
+                    let starts1 = name1Lower.hasPrefix(lowerQuery)
+                    let starts2 = name2Lower.hasPrefix(lowerQuery)
+
+                    if starts1 && !starts2 { return true }
+                    if starts2 && !starts1 { return false }
+
+                    // Otherwise alphabetical
+                    return name1Lower < name2Lower
+                }
+
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -246,6 +283,18 @@ final class FriendsViewModel: ObservableObject {
         do {
             pendingRequests = try await db.fetchList(collection: Collection.friendRequests) { ref in
                 ref.whereField("toUID", isEqualTo: currentUser.uid)
+                   .whereField("status", isEqualTo: FriendRequest.FriendRequestStatus.pending.rawValue)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Load outgoing requests
+    func loadOutgoingRequests(currentUID: String) async {
+        do {
+            outgoingRequests = try await db.fetchList(collection: Collection.friendRequests) { ref in
+                ref.whereField("fromUID", isEqualTo: currentUID)
                    .whereField("status", isEqualTo: FriendRequest.FriendRequestStatus.pending.rawValue)
             }
         } catch {

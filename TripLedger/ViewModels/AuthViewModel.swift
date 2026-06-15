@@ -10,6 +10,7 @@ final class AuthViewModel: ObservableObject {
     @Published var isCheckingSession = true
     @Published var isLoading       = false
     @Published var errorMessage:   String?
+    @Published var showSuspendedAlert = false
 
     private let authService = AuthService.shared
     private var authListener: AuthStateDidChangeListenerHandle?
@@ -50,13 +51,21 @@ final class AuthViewModel: ObservableObject {
     func register(name: String, email: String, password: String) async {
         isLoading     = true
         errorMessage  = nil
+        showSuspendedAlert = false
         defer { isLoading = false }
         do {
             let user = try await authService.signUp(name: name, email: email, password: password)
             currentUser     = user
             isAuthenticated = true
         } catch {
-            errorMessage = error.localizedDescription
+            // Check if account is suspended (rare but possible if re-registering)
+            if let appError = error as? AppError, case .accountSuspended = appError {
+                showSuspendedAlert = true
+                return
+            }
+
+            let mappedError = authService.mapFirebaseError(error)
+            errorMessage = mappedError.localizedDescription
         }
     }
 
@@ -64,13 +73,21 @@ final class AuthViewModel: ObservableObject {
     func login(email: String, password: String) async {
         isLoading    = true
         errorMessage = nil
+        showSuspendedAlert = false
         defer { isLoading = false }
         do {
             let user = try await authService.signIn(email: email, password: password)
             currentUser     = user
             isAuthenticated = true
         } catch {
-            errorMessage = error.localizedDescription
+            // Check if account is suspended
+            if let appError = error as? AppError, case .accountSuspended = appError {
+                showSuspendedAlert = true
+                return
+            }
+
+            let mappedError = authService.mapFirebaseError(error)
+            errorMessage = mappedError.localizedDescription
         }
     }
 
@@ -133,5 +150,11 @@ final class AuthViewModel: ObservableObject {
     func refreshUser() async {
         guard let uid = authService.currentUID else { return }
         currentUser = try? await authService.fetchUser(uid: uid)
+    }
+
+    // MARK: - Clear errors
+    func clearErrors() {
+        errorMessage = nil
+        showSuspendedAlert = false
     }
 }

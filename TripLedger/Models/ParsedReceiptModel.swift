@@ -10,6 +10,7 @@ struct ParsedReceiptModel: Codable {
     var date: String?                 // Tanggal transaksi (optional)
     var taxAmount: Double?            // Pajak (optional)
     var serviceCharge: Double?        // Service charge (optional)
+    var discount: Double?             // Diskon (optional)
 
     var description: String {
         var desc = "Tagihan: \(billName)\n"
@@ -20,7 +21,11 @@ struct ParsedReceiptModel: Codable {
         if !items.isEmpty {
             desc += "\nItem (\(items.count)):\n"
             for item in items {
-                desc += "- \(item.name): \(currency) \(String(format: "%.0f", item.price))\n"
+                if let price = item.price {
+                    desc += "- \(item.name): \(currency) \(String(format: "%.0f", price))\n"
+                } else {
+                    desc += "- \(item.name): (tidak ada harga)\n"
+                }
             }
         }
         return desc
@@ -29,9 +34,9 @@ struct ParsedReceiptModel: Codable {
 
 // MARK: - Receipt Item
 struct ReceiptItem: Codable, Identifiable {
-    var id: String { name + "\(price)" }
+    var id: String { name + "\(price ?? 0)" }
     var name: String
-    var price: Double
+    var price: Double?  // Optional to handle items without price (like plastic bags)
     var quantity: Int?
 }
 
@@ -47,4 +52,5 @@ struct AIReceiptResponse: Codable {
     var date: String?
     var taxAmount: Double?
     var serviceCharge: Double?
+    var discount: Double?          // Diskon
 }

@@ -5,13 +5,23 @@ import PhotosUI
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
     @Environment(\.presentationMode) private var presentationMode
-    
+
     var sourceType: UIImagePickerController.SourceType = .photoLibrary
 
     func makeUIViewController(context: UIViewControllerRepresentableContext<ImagePicker>) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.sourceType = sourceType
+
+        // Full screen camera without navigation bar/toolbar
+        if sourceType == .camera {
+            picker.showsCameraControls = true
+            picker.navigationBar.isHidden = true
+            picker.isToolbarHidden = true
+            picker.modalPresentationStyle = .fullScreen
+            picker.cameraViewTransform = CGAffineTransform(translationX: 0, y: 0)
+        }
+
         return picker
     }
 

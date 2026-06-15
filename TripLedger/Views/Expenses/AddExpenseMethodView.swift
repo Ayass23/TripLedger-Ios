@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum AddExpenseSource {
     case manual
@@ -9,11 +10,16 @@ struct AddExpenseMethodView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var expenseVM: ExpenseViewModel
-    
+
     let trip: TripModel
     @Binding var isAddingExpense: Bool
-    
-    @State private var showScanReceipt = false
+
+    // Photo Source Selection Flow
+    @State private var navigateToSourcePicker = false
+    @State private var showCamera = false
+    @State private var showGallery = false
+    @State private var selectedImage: UIImage?
+    @State private var navigateToProcessing = false
     @State private var scannedResult: OCRResult?
     @State private var navigateToForm = false
     
@@ -24,10 +30,10 @@ struct AddExpenseMethodView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // MARK: Header
                 Text("Pilih cara menambahkan pengeluaran baru")
-                    .font(AppFont.title2())
-                    .foregroundColor(.textPrimary.opacity(0.7))
+                    .font(AppFont.headline())
+                    .foregroundColor(.textPrimary.opacity(0.5))
                     .padding(.horizontal, 20)
-                    .padding(.top, 40)
+                    .padding(.top)
                     .padding(.bottom, 32)
                 
                 // MARK: Action Buttons
@@ -68,7 +74,7 @@ struct AddExpenseMethodView: View {
                     .buttonStyle(.plain)
                     
                     // Scan Receipt
-                    Button { showScanReceipt = true } label: {
+                    Button { navigateToSourcePicker = true } label: {
                         VStack(spacing: 12) {
                             ZStack {
                                 Circle()
@@ -106,19 +112,66 @@ struct AddExpenseMethodView: View {
         .navigationTitle("Tambah Pengeluaran")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .sheet(isPresented: $showScanReceipt) {
-            ReceiptScanView { result in
-                scannedResult = result
-                showScanReceipt = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    navigateToForm = true
+        // Navigate to PhotoSourcePickerPage first
+        .navigationDestination(isPresented: $navigateToSourcePicker) {
+            PhotoSourcePickerPage(
+                onSelectCamera: {
+                    showCamera = true
+                },
+                onSelectGallery: {
+                    showGallery = true
                 }
+            )
+        }
+        // Camera - Full Screen
+        .fullScreenCover(isPresented: $showCamera) {
+            ImagePicker(selectedImage: $selectedImage, sourceType: .camera)
+                .ignoresSafeArea()
+                .onDisappear {
+                    if selectedImage != nil {
+                        navigateToProcessing = true
+                    }
+                }
+        }
+        // Gallery - Sheet (modal)
+        .sheet(isPresented: $showGallery) {
+            ImagePicker(selectedImage: $selectedImage, sourceType: .photoLibrary)
+                .onDisappear {
+                    if selectedImage != nil {
+                        navigateToProcessing = true
+                    }
+                }
+        }
+        // ReceiptProcessingPage - AI loading
+        .navigationDestination(isPresented: $navigateToProcessing) {
+            if let image = selectedImage {
+                ReceiptProcessingPage(
+                    selectedImage: image,
+                    onSuccess: { result in
+                        scannedResult = result
+                        navigateToProcessing = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            navigateToForm = true
+                        }
+                    },
+                    onError: {
+                        // Go back to method selection on error
+                        navigateToProcessing = false
+                        selectedImage = nil
+                    }
+                )
             }
         }
+        // CreateExpenseFromReceiptView - Final form
         .navigationDestination(isPresented: $navigateToForm) {
-            AddExpenseView(trip: trip, source: .scan, scannedResult: scannedResult, isAddingExpense: $isAddingExpense)
-                .environmentObject(authVM)
-                .environmentObject(expenseVM)
+            CreateExpenseFromReceiptView(
+                trip: trip,
+                scannedResult: scannedResult,
+                receiptImage: selectedImage,
+                isAddingExpense: $isAddingExpense
+            )
+            .environmentObject(authVM)
+            .environmentObject(expenseVM)
         }
     }
 }

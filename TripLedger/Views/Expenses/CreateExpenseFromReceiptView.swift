@@ -1,29 +1,28 @@
 import SwiftUI
 import FirebaseFirestore
 
-struct CreateSplitBillView: View {
+struct CreateExpenseFromReceiptView: View {
     @Environment(\.dismiss) var dismiss
-    @EnvironmentObject private var authVM:      AuthViewModel
-    @EnvironmentObject private var splitBillVM: SplitBillViewModel
-    @EnvironmentObject private var friendsVM:   FriendsViewModel
-    @StateObject private var profileVM = ProfileViewModel()
+    @EnvironmentObject private var authVM: AuthViewModel
+    @EnvironmentObject private var expenseVM: ExpenseViewModel
 
-    let source:        SplitBillSource
+    let trip: TripModel
     let scannedResult: OCRResult?
-    let receiptImage:  UIImage?
+    let receiptImage: UIImage?
+    @Binding var isAddingExpense: Bool
 
     // UI State
     @State private var step = 1
-    
+
     // Step 1: Info Dasar
-    @State private var title       = ""
-    @State private var amountStr   = ""
-    @State private var currency    = "Rp"
-    @State private var category    = ExpenseCategory.food
-    @State private var notes       = ""
+    @State private var title = ""
+    @State private var amountStr = ""
+    @State private var currency = "Rp"
+    @State private var category = ExpenseCategory.food
+    @State private var notes = ""
     @State private var transactionDate = Date()
 
-    // Additional charges (editable)
+    // Additional charges (from OCR)
     @State private var taxAmountStr = ""
     @State private var serviceChargeStr = ""
     @State private var discountStr = ""
@@ -34,7 +33,6 @@ struct CreateSplitBillView: View {
             .replacingOccurrences(of: ",", with: "")  // Remove any commas
             .trimmingCharacters(in: .whitespaces)
         let amount = Double(cleaned) ?? 0
-        print("💰 [CreateSplitBillView] totalAmount computed: '\(amountStr)' → \(amount)")
         return amount
     }
 
@@ -61,23 +59,18 @@ struct CreateSplitBillView: View {
             .trimmingCharacters(in: .whitespaces)
         return Double(cleaned) ?? 0
     }
-
     private var isStep1Valid: Bool { !title.isBlank && totalAmount > 0 }
 
     // Step 2: Participants
+    struct ParticipantEntry: Identifiable, Equatable {
+        let id: String
+        var uid: String
+        var name: String
+        var isSelected: Bool = true
+    }
     @State private var participants: [ParticipantEntry] = []
-    @State private var showAddGuest = false
-    @State private var paidByParticipant: ParticipantEntry?  // Who paid first (default: current user)
-
-    // Bank Account Check
-    @State private var showBankAccountAlert = false
-    @State private var showEditBankView = false
 
     private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) }
-
-    // Loading overlay
-    @State private var showLoadingOverlay = false
-    @State private var loadingMessage = ""
 
     // Step 3: Item-based Splits
     struct ItemEntry: Identifiable, Hashable {
@@ -85,11 +78,11 @@ struct CreateSplitBillView: View {
         var name: String
         var price: Double
         var quantity: Int = 1
-        var selectedParticipantIDs: Set<String> = []  // IDs of participants who bought this item
+        var selectedParticipantIDs: Set<String> = []
     }
     @State private var items: [ItemEntry] = []
-    @State private var showEditItem: ItemEntry?  // Item being edited
-    @State private var showAddItem = false  // Show add item sheet
+    @State private var showEditItem: ItemEntry?
+    @State private var showAddItem = false
     @State private var editingItemName = ""
     @State private var editingItemPrice = ""
     @State private var editingItemQuantity = 1
@@ -99,8 +92,6 @@ struct CreateSplitBillView: View {
     // Calculate how much each participant owes based on their item selections
     private func calculateParticipantAmount(_ participantID: String) -> Double {
         var itemTotal: Double = 0
-
-        // Calculate items
         for item in items {
             if item.selectedParticipantIDs.contains(participantID) {
                 let shareCount = item.selectedParticipantIDs.count
@@ -109,26 +100,16 @@ struct CreateSplitBillView: View {
                 }
             }
         }
-
-        // Add proportional tax, service charge, and subtract proportional discount
-        let itemsTotal = items.reduce(0.0) { $0 + ($1.price * Double($1.quantity)) }
-        if itemsTotal > 0 {
-            let proportion = itemTotal / itemsTotal
-            itemTotal += (taxAmount + serviceCharge) * proportion
-            itemTotal -= discount * proportion
-        }
-
         return itemTotal
     }
 
     private var calculatedTotal: Double {
-        // Sum of all item prices with quantities plus tax and service minus discount
-        let itemsTotal = items.reduce(0) { $0 + ($1.price * Double($1.quantity)) }
+        let itemsTotal = items.reduce(0.0) { $0 + ($1.price * Double($1.quantity)) }
+        // Add tax and service charge, subtract discount
         return itemsTotal + taxAmount + serviceCharge - discount
     }
 
     private var isStep3Valid: Bool {
-        // Valid if all items have at least one participant selected AND total matches
         !items.isEmpty &&
         items.allSatisfy { !$0.selectedParticipantIDs.isEmpty } &&
         abs(calculatedTotal - totalAmount) < 0.01
@@ -138,62 +119,50 @@ struct CreateSplitBillView: View {
         abs(calculatedTotal - totalAmount) < 0.01
     }
 
-    // MARK: - Main Content View
-    private var mainContentView: some View {
-        ZStack {
-            Color.baseFallback.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Header Progress
-                ProgressHeader(step: step, totalSteps: 3)
-                    .padding(.top, 10)
-                    .padding(.bottom, 20)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        if step == 1 {
-                            step1View
-                        } else if step == 2 {
-                            step2View
-                        } else if step == 3 {
-                            step3View
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
-                }
-                .dismissKeyboardOnTap()
-
-                // Bottom Navigation
-                bottomNavView
-            }
-
-            // Loading Overlay
-            if showLoadingOverlay {
-                loadingOverlayView
-            }
-        }
-        .navigationTitle(source == .scan ? "Split dari Struk" : "Split Bill Baru")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
-        .disabled(showLoadingOverlay)
-        .navigationBarBackButtonHidden(showLoadingOverlay)
-    }
-
     var body: some View {
         NavigationStack {
-            mainContentView
+            ZStack {
+                Color.baseFallback.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // Header Progress
+                    ProgressHeader(step: step, totalSteps: 3)
+                        .padding(.top, 10)
+                        .padding(.bottom, 20)
+
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            if step == 1 {
+                                step1View
+                            } else if step == 2 {
+                                step2View
+                            } else if step == 3 {
+                                step3View
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 40)
+                    }
+                    .dismissKeyboardOnTap()
+
+                    // Bottom Navigation
+                    bottomNavView
+                }
+            }
+            .navigationTitle("Dari Struk")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
         }
         .onAppear {
-            print("\n📋 [CreateSplitBillView] Initializing form...")
+            print("\n📋 [CreateExpenseFromReceiptView] Initializing form...")
             print("   📸 Received receiptImage: \(receiptImage != nil)")
             print("   🔍 Received scannedResult: \(scannedResult != nil)")
 
             // Auto-fill from AI-parsed receipt data
             if let result = scannedResult, let parsed = result.parsedReceipt {
-                print("✨ [CreateSplitBillView] Auto-filling from AI-parsed data:")
+                print("✨ [CreateExpenseFromReceiptView] Auto-filling from AI-parsed data:")
 
-                // Fill bill name
+                // Fill expense name
                 title = parsed.billName
                 print("   📝 Title: \(parsed.billName)")
 
@@ -214,10 +183,30 @@ struct CreateSplitBillView: View {
                     }
                 }
 
-                // Fill items for Step 3 with quantities (filter out items without price)
+                // Fill date if available
+                if let dateStr = parsed.date, let date = parseDate(dateStr) {
+                    transactionDate = date
+                    print("   📅 Date: \(dateStr)")
+                }
+
+                // Fill additional charges
+                if let tax = parsed.taxAmount, tax > 0 {
+                    taxAmountStr = String(Int(tax))
+                    print("   🧾 Tax: \(tax)")
+                }
+                if let service = parsed.serviceCharge, service > 0 {
+                    serviceChargeStr = String(Int(service))
+                    print("   🔔 Service Charge: \(service)")
+                }
+                if let disc = parsed.discount, disc > 0 {
+                    discountStr = String(Int(disc))
+                    print("   🎫 Discount: \(disc)")
+                }
+
+                // Fill items for Step 3 (filter out items without price)
                 if !parsed.items.isEmpty {
                     items = parsed.items.compactMap { receiptItem in
-                        // Skip items without price (like plastic bags)
+                        // Skip items without price
                         guard let price = receiptItem.price, price > 0 else {
                             print("   ⚠️ Skipping item '\(receiptItem.name)' - no price")
                             return nil
@@ -228,73 +217,47 @@ struct CreateSplitBillView: View {
                             quantity: receiptItem.quantity ?? 1
                         )
                     }
-                    print("   📦 Items: \(items.count) items loaded for splitting (filtered from \(parsed.items.count))")
-
-                    // If all items were filtered out (no valid prices), use total
-                    if items.isEmpty {
-                        items = [ItemEntry(name: "Total Tagihan", price: parsed.totalAmount, quantity: 1)]
-                        print("   ⚠️ All items had no price, using total as single item")
-                    }
+                    print("   📦 Items: \(items.count) items loaded (filtered from \(parsed.items.count))")
                 } else {
                     // If no items, create a single "Total" item
-                    items = [ItemEntry(name: "Total Tagihan", price: parsed.totalAmount, quantity: 1)]
+                    items = [ItemEntry(name: "Total Pengeluaran", price: parsed.totalAmount, quantity: 1)]
                     print("   ⚠️ No items found, using total as single item")
                 }
 
-                // Fill tax, service charge, and discount
-                if let tax = parsed.taxAmount, tax > 0 {
-                    taxAmountStr = String(Int(tax))
-                    print("   💳 Tax: \(currency) \(tax)")
-                }
-                if let service = parsed.serviceCharge, service > 0 {
-                    serviceChargeStr = String(Int(service))
-                    print("   🍽️  Service: \(currency) \(service)")
-                }
-                if let disc = parsed.discount, disc > 0 {
-                    discountStr = String(Int(disc))
-                    print("   🎟️  Discount: \(currency) \(disc)")
-                }
-
-                // Fill date if available
-                if let dateStr = parsed.date, let date = parseDate(dateStr) {
-                    transactionDate = date
-                    print("   📅 Date: \(dateStr)")
-                }
-
-                print("✅ [CreateSplitBillView] Auto-fill completed from AI data")
+                print("✅ [CreateExpenseFromReceiptView] Auto-fill completed from AI data")
             } else if let result = scannedResult, let parsed = result.parsedAmount {
                 // Fallback to basic OCR parsing
                 amountStr = String(Int(parsed))
-                print("⚠️ [CreateSplitBillView] Using basic OCR parsing (amount only): \(parsed)")
+                print("⚠️ [CreateExpenseFromReceiptView] Using basic OCR parsing (amount only): \(parsed)")
 
                 // Create single item for manual split
                 if totalAmount > 0 {
-                    items = [ItemEntry(name: "Total Tagihan", price: totalAmount, quantity: 1)]
+                    items = [ItemEntry(name: "Total Pengeluaran", price: totalAmount, quantity: 1)]
                 }
             } else {
-                print("ℹ️ [CreateSplitBillView] No scanned data, manual input mode")
+                print("ℹ️ [CreateExpenseFromReceiptView] No scanned data")
             }
 
-            // Ensure items exist for manual entry
+            // Ensure items exist
             if items.isEmpty && totalAmount > 0 {
-                items = [ItemEntry(name: "Total Tagihan", price: totalAmount)]
+                items = [ItemEntry(name: "Total Pengeluaran", price: totalAmount)]
                 print("   📦 Created default item for manual split")
             }
 
-            if participants.isEmpty, let user = authVM.currentUser {
-                let currentUserParticipant = ParticipantEntry(id: user.uid, uid: user.uid, name: user.displayName, isSelected: true)
-                participants.append(currentUserParticipant)
-                paidByParticipant = currentUserParticipant  // Default: current user is the payer
-                print("👤 [CreateSplitBillView] Added current user as participant: \(user.displayName)")
-                print("💳 [CreateSplitBillView] Default payer: \(user.displayName)")
+            // Init Participants from trip members
+            if participants.isEmpty {
+                participants = trip.members.map { member in
+                    ParticipantEntry(id: member.uid, uid: member.uid, name: member.displayName, isSelected: true)
+                }
+                print("👥 [CreateExpenseFromReceiptView] Loaded \(participants.count) participants from trip")
             }
 
-            print("📋 [CreateSplitBillView] Form initialized\n")
+            print("📋 [CreateExpenseFromReceiptView] Form initialized\n")
         }
         .onChange(of: totalAmount) { _ in
             // Update items if total changes and we only have the default item
-            if items.count == 1 && items.first?.name == "Total Tagihan" {
-                items = [ItemEntry(name: "Total Tagihan", price: totalAmount, quantity: 1)]
+            if items.count == 1 && items.first?.name == "Total Pengeluaran" {
+                items = [ItemEntry(name: "Total Pengeluaran", price: totalAmount, quantity: 1)]
             }
         }
         .onChange(of: amountStr) { newValue in
@@ -313,53 +276,24 @@ struct CreateSplitBillView: View {
             let formatted = newValue.formattedAsCurrency()
             if discountStr != formatted { discountStr = formatted }
         }
-        .sheet(isPresented: $showAddGuest) {
-            AddParticipantView(participants: $participants)
-                .environmentObject(authVM)
-                .environmentObject(friendsVM)
-        }
         .sheet(item: $showEditItem) { item in
             editItemSheet(item: item)
         }
         .sheet(isPresented: $showAddItem) {
             addItemSheet()
         }
-        .sheet(isPresented: $showEditBankView) {
-            NavigationStack {
-                EditBankView(profileVM: profileVM)
-                    .environmentObject(authVM)
-            }
-        }
-        .alert("Rekening Belum Diisi", isPresented: $showBankAccountAlert) {
-            Button("Isi Rekening") {
-                showEditBankView = true
-            }
-        } message: {
-            Text("Orang yang bayar dulu belum punya nomor rekening. Silakan isi rekening terlebih dahulu.")
-        }
-        .onChange(of: showEditBankView) { isShowing in
-            // After user dismisses EditBankView, check if bank account is now filled
-            if !isShowing && step == 2 {
-                // Check again if bank account is filled
-                if !checkBankAccountBeforeContinue() {
-                    // Bank account is now filled, proceed to next step
-                    withAnimation { step += 1 }
-                    print("✅ [CreateSplitBillView] Bank account filled - proceeding to step 3")
-                }
-            }
-        }
     }
 
     // MARK: - Step 1: Info Dasar
     private var step1View: some View {
         VStack(alignment: .leading, spacing: 24) {
-            if source == .scan, let result = scannedResult {
+            if let result = scannedResult {
                 scanResultBanner(result)
             }
 
-            // Nama Tagihan
+            // Nama Pengeluaran
             VStack(alignment: .leading, spacing: 10) {
-                Text("Nama Tagihan")
+                Text("Nama Pengeluaran")
                     .font(AppFont.subheadline())
                     .foregroundColor(.textPrimary.opacity(0.6))
 
@@ -386,9 +320,9 @@ struct CreateSplitBillView: View {
                 )
             }
 
-            // Total Tagihan
+            // Total Pengeluaran
             VStack(alignment: .leading, spacing: 10) {
-                Text("Total Tagihan (\(currency))")
+                Text("Total Pengeluaran (\(currency))")
                     .font(AppFont.subheadline())
                     .foregroundColor(.textPrimary.opacity(0.6))
 
@@ -487,14 +421,14 @@ struct CreateSplitBillView: View {
                     }
                 }
             }
-            
+
             // Catatan
             VStack(alignment: .leading, spacing: 10) {
                 Text("Catatan (opsional)")
                     .font(AppFont.subheadline())
                     .foregroundColor(.textPrimary.opacity(0.6))
 
-                HStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
                     ZStack {
                         Circle()
                             .fill(Color.brandAccent.opacity(0.15))
@@ -504,7 +438,9 @@ struct CreateSplitBillView: View {
                             .foregroundColor(.brandAccent)
                     }
 
-                    TextField("Tambahkan catatan...", text: $notes)
+                    TextEditor(text: $notes)
+                        .frame(height: 80)
+                        .scrollContentBackground(.hidden)
                         .font(AppFont.subheadline())
                         .foregroundColor(.textPrimary)
                 }
@@ -522,27 +458,10 @@ struct CreateSplitBillView: View {
     // MARK: - Step 2: Pilih Peserta
     private var step2View: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text("Siapa yang ikut patungan?")
-                    .font(AppFont.headline())
-                    .foregroundColor(.textPrimary)
-                Spacer()
-                Button {
-                    showAddGuest = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.badge.plus")
-                        Text("Tambah")
-                    }
-                    .font(AppFont.caption())
-                    .foregroundColor(.brandAccent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.brandAccent.opacity(0.12))
-                    .clipShape(Capsule())
-                }
-            }
-            
+            Text("Siapa yang ikut patungan?")
+                .font(AppFont.headline())
+                .foregroundColor(.textPrimary)
+
             VStack(spacing: 12) {
                 ForEach($participants) { $participant in
                     Button {
@@ -552,7 +471,7 @@ struct CreateSplitBillView: View {
                             Image(systemName: participant.isSelected ? "checkmark.square.fill" : "square")
                                 .foregroundColor(participant.isSelected ? .brandPrimary : .textPrimary.opacity(0.3))
                                 .font(.system(size: 22))
-                            
+
                             ZStack {
                                 Circle()
                                     .fill(Color.brandAccent.opacity(0.12))
@@ -561,13 +480,13 @@ struct CreateSplitBillView: View {
                                     .font(AppFont.caption())
                                     .foregroundColor(.brandAccent)
                             }
-                            
+
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(participant.name)
                                     .font(AppFont.subheadline())
                                     .foregroundColor(.textPrimary)
                                 if participant.uid == authVM.currentUser?.uid {
-                                    Text("Kamu (Pembuat)")
+                                    Text("Kamu")
                                         .font(AppFont.caption2())
                                         .foregroundColor(.textPrimary.opacity(0.5))
                                 }
@@ -583,64 +502,6 @@ struct CreateSplitBillView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                }
-            }
-
-            // Payer Selection Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("💳 Siapa yang bayar dulu?")
-                            .font(AppFont.headline())
-                            .foregroundColor(.textPrimary)
-                        Text("Orang ini yang harus dibayar balik")
-                            .font(AppFont.caption())
-                            .foregroundColor(.textPrimary.opacity(0.6))
-                    }
-                    Spacer()
-                }
-
-                VStack(spacing: 12) {
-                    ForEach(participants.filter { $0.isSelected }) { participant in
-                        Button {
-                            paidByParticipant = participant
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: paidByParticipant?.id == participant.id ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(paidByParticipant?.id == participant.id ? .brandPrimary : .textPrimary.opacity(0.3))
-                                    .font(.system(size: 22))
-
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.brandAccent.opacity(0.12))
-                                        .frame(width: 36, height: 36)
-                                    Text(String(participant.name.prefix(1)).uppercased())
-                                        .font(AppFont.caption())
-                                        .foregroundColor(.brandAccent)
-                                }
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(participant.name)
-                                        .font(AppFont.subheadline())
-                                        .foregroundColor(.textPrimary)
-                                    if participant.uid == authVM.currentUser?.uid {
-                                        Text("Kamu")
-                                            .font(AppFont.caption2())
-                                            .foregroundColor(.textPrimary.opacity(0.5))
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(14)
-                            .background(paidByParticipant?.id == participant.id ? Color.brandPrimary.opacity(0.08) : Color.cardFallback)
-                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AppRadius.md)
-                                    .stroke(paidByParticipant?.id == participant.id ? Color.brandPrimary : Color.borderSoft, lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
                 }
             }
         }
@@ -670,29 +531,15 @@ struct CreateSplitBillView: View {
                                 Text("\(item.quantity)x \(item.name)")
                                     .font(AppFont.subheadline())
                                     .foregroundColor(.textPrimary)
-                                // Show price breakdown clearly
-                                if item.quantity > 1 {
-                                    // Format: @ Rp 5,000 = Rp 15,000
-                                    HStack(spacing: 4) {
-                                        Text("@")
-                                            .font(AppFont.caption2())
-                                            .foregroundColor(.textPrimary.opacity(0.5))
-                                        Text(item.price.toCurrency(symbol: currency))
-                                            .font(AppFont.caption())
-                                            .foregroundColor(.brandPrimary)
-                                        Text("=")
-                                            .font(AppFont.caption2())
-                                            .foregroundColor(.textPrimary.opacity(0.5))
-                                        Text((item.price * Double(item.quantity)).toCurrency(symbol: currency))
-                                            .font(AppFont.caption())
-                                            .foregroundColor(.brandPrimary)
-                                            .fontWeight(.semibold)
-                                    }
-                                } else {
-                                    // Single item: just show price
+                                HStack(spacing: 4) {
                                     Text(item.price.toCurrency(symbol: currency))
                                         .font(AppFont.caption())
                                         .foregroundColor(.brandPrimary)
+                                    if item.quantity > 1 {
+                                        Text("(@\((item.price * Double(item.quantity)).toCurrency(symbol: currency)))")
+                                            .font(AppFont.caption2())
+                                            .foregroundColor(.textPrimary.opacity(0.5))
+                                    }
                                 }
                             }
                             Spacer()
@@ -726,12 +573,9 @@ struct CreateSplitBillView: View {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         if item.selectedParticipantIDs.contains(participant.id) {
                                             item.selectedParticipantIDs.remove(participant.id)
-                                            print("🔴 [Step3] Removed \(participant.name) from \(item.name)")
                                         } else {
                                             item.selectedParticipantIDs.insert(participant.id)
-                                            print("✅ [Step3] Added \(participant.name) to \(item.name)")
                                         }
-                                        print("   Current selections for \(item.name): \(item.selectedParticipantIDs.count) people")
                                     }
                                 } label: {
                                     HStack(spacing: 6) {
@@ -918,15 +762,9 @@ struct CreateSplitBillView: View {
                 }
 
                 // Info text
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("💡 Otomatis terdeteksi dari struk. Kamu bisa edit atau hapus jika salah.")
-                        .font(AppFont.caption2())
-                        .foregroundColor(.textPrimary.opacity(0.5))
-                    Text("*Dibagi proporsional sesuai item yang dibeli")
-                        .font(AppFont.caption2())
-                        .foregroundColor(.textPrimary.opacity(0.5))
-                        .italic()
-                }
+                Text("💡 Otomatis terdeteksi dari struk. Kamu bisa edit atau hapus jika salah.")
+                    .font(AppFont.caption2())
+                    .foregroundColor(.textPrimary.opacity(0.5))
             }
 
             // Summary
@@ -937,14 +775,14 @@ struct CreateSplitBillView: View {
 
                 VStack(spacing: 8) {
                     ForEach(activeParticipants) { participant in
-                        let amount = calculateParticipantAmount(participant.id)
-                        if amount > 0 {
+                        let participantAmount = calculateParticipantAmount(participant.id)
+                        if participantAmount > 0 {
                             HStack {
                                 Text(participant.name)
                                     .font(AppFont.subheadline())
                                     .foregroundColor(.textPrimary)
                                 Spacer()
-                                Text(amount.toCurrency(symbol: currency))
+                                Text(participantAmount.toCurrency(symbol: currency))
                                     .font(AppFont.subheadline())
                                     .foregroundColor(.brandPrimary)
                             }
@@ -1011,15 +849,6 @@ struct CreateSplitBillView: View {
                         .padding(.vertical, 2)
                     }
 
-                    // Show proportional distribution note if there are additional charges
-                    if taxAmount > 0 || serviceCharge > 0 || discount > 0 {
-                        Text("*Dibagi proporsional sesuai item yang dibeli")
-                            .font(AppFont.caption2())
-                            .foregroundColor(.textPrimary.opacity(0.5))
-                            .italic()
-                            .padding(.top, 4)
-                    }
-
                     Divider()
                         .padding(.vertical, 4)
 
@@ -1083,10 +912,10 @@ struct CreateSplitBillView: View {
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.full))
                     }
                 }
-                
+
                 if step < 3 {
                     Button {
-                        handleNextStep()
+                        withAnimation { step += 1 }
                     } label: {
                         Text("Selanjutnya")
                             .font(AppFont.headline())
@@ -1099,9 +928,9 @@ struct CreateSplitBillView: View {
                     .disabled(step == 1 ? !isStep1Valid : !isStep2Valid)
                 } else {
                     Button {
-                        Task { await saveBill() }
+                        Task { await saveExpense() }
                     } label: {
-                        Text(splitBillVM.isLoading ? "Menyimpan..." : "Simpan Split Bill")
+                        Text(expenseVM.isLoading ? "Menyimpan..." : "Simpan Pengeluaran")
                             .font(AppFont.headline())
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -1109,7 +938,7 @@ struct CreateSplitBillView: View {
                             .background(isStep3Valid ? LinearGradient.brandGradient : LinearGradient(colors: [.gray.opacity(0.4)], startPoint: .leading, endPoint: .trailing))
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.full))
                     }
-                    .disabled(!isStep3Valid || splitBillVM.isLoading)
+                    .disabled(!isStep3Valid || expenseVM.isLoading)
                 }
             }
             .padding(20)
@@ -1177,123 +1006,34 @@ struct CreateSplitBillView: View {
         }
     }
 
-    // MARK: - Loading Overlay
-    private var loadingOverlayView: some View {
-        ZStack {
-            // Dark overlay background
-            Color.black.opacity(0.6)
-                .ignoresSafeArea()
-
-            // Loading card
-            VStack(spacing: 20) {
-                ProgressView()
-                    .scaleEffect(1.5)
-                    .tint(.white)
-
-                VStack(spacing: 8) {
-                    Text(loadingMessage)
-                        .font(AppFont.headline())
-                        .foregroundColor(.white)
-
-                    if let image = receiptImage {
-                        let imageSizeInMB = Double(image.jpegData(compressionQuality: 0.8)?.count ?? 0) / 1_048_576
-                        if imageSizeInMB > 0.1 {
-                            Text(String(format: "%.1f MB", imageSizeInMB))
-                                .font(AppFont.caption())
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-                    }
-                }
-            }
-            .padding(40)
-            .background(Color.black.opacity(0.7))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-        .transition(.opacity)
-        .animation(.easeInOut(duration: 0.2), value: showLoadingOverlay)
-    }
-
     // MARK: - Save
-    private func saveBill() async {
+    private func saveExpense() async {
         guard let user = authVM.currentUser else { return }
 
-        print("💾 [CreateSplitBillView] Saving split bill...")
+        print("💾 [CreateExpenseFromReceiptView] Saving expense...")
         print("   📝 Title: \(title)")
-        print("   💰 amountStr: '\(amountStr)'")
-        print("   💰 totalAmount: \(totalAmount)")
-        print("   💰 calculatedTotal: \(calculatedTotal)")
+        print("   💰 Amount: \(currency) \(calculatedTotal)")
         print("   📸 receiptImage available: \(receiptImage != nil)")
 
-        // Upload receipt image if available
-        var receiptURL: String? = nil
-        if let image = receiptImage {
-            print("📸 [CreateSplitBillView] Uploading receipt image...")
+        // Build splits based on item selections
+        let finalSplits: [ExpenseSplit] = activeParticipants.compactMap { p in
+            let splitAmount = calculateParticipantAmount(p.id)
+            guard splitAmount > 0 else { return nil }
 
-            // Show loading overlay
-            await MainActor.run {
-                loadingMessage = "Mengupload struk..."
-                showLoadingOverlay = true
-            }
-
-            do {
-                let response = try await FirebaseStorageService.shared.uploadImage(
-                    image,
-                    folder: "receipts",
-                    fileName: "receipt_\(user.uid)_\(Int(Date().timeIntervalSince1970)).jpg"
-                )
-                receiptURL = response.downloadURL
-                print("✅ [CreateSplitBillView] Receipt uploaded: \(receiptURL ?? "")")
-            } catch {
-                print("❌ [CreateSplitBillView] Failed to upload receipt: \(error.localizedDescription)")
-                // Continue saving even if image upload fails
-            }
-
-            // Update loading message to saving data
-            await MainActor.run {
-                loadingMessage = "Menyimpan data..."
-            }
-        } else {
-            // No receipt image, show overlay for saving only
-            await MainActor.run {
-                loadingMessage = "Menyimpan data..."
-                showLoadingOverlay = true
-            }
-        }
-
-        // Calculate amount for each participant based on their item selections
-        // Filter out participants with 0 amount
-        let billParticipants: [SplitBillParticipant] = activeParticipants.compactMap { entry -> SplitBillParticipant? in
-            let calculatedAmount = calculateParticipantAmount(entry.id)
-            print("   👤 \(entry.name): \(currency) \(calculatedAmount)")
-
-            // Skip participants with 0 amount
-            guard calculatedAmount > 0 else {
-                print("   ⚠️ Skipping \(entry.name) - amount is 0")
-                return nil
-            }
-
-            return SplitBillParticipant(
-                id: entry.id,
-                uid: entry.uid,
-                displayName: entry.name,
-                amount: calculatedAmount,
-                isPaid: false
+            print("   👤 \(p.name): \(currency) \(splitAmount)")
+            return ExpenseSplit(
+                id: p.id,
+                uid: p.uid,
+                displayName: p.name,
+                amount: splitAmount,
+                items: []
             )
         }
 
-        // Build notes with item breakdown (only include participants with amount > 0)
-        var notesText = notes.isBlank ? "" : notes + "\n\n"
-        notesText += "Tanggal: \(formatDate(transactionDate))\n\n"
-
-        // Only show participants who owe money
-        notesText += "Peserta Patungan:\n"
-        let participantsWithAmount = activeParticipants.filter { calculateParticipantAmount($0.id) > 0 }
-        for participant in participantsWithAmount {
-            let amount = calculateParticipantAmount(participant.id)
-            notesText += "• \(participant.name): \(currency) \(Int(amount))\n"
-        }
-
-        notesText += "\nPembagian Item:\n"
+        // Build notes with item breakdown
+        var finalNotes = notes.isBlank ? "" : notes + "\n\n"
+        finalNotes += "Tanggal: \(formatDate(transactionDate))\n\n"
+        finalNotes += "Pembagian Item:\n"
         for item in items {
             if !item.selectedParticipantIDs.isEmpty {
                 let participantNames = activeParticipants
@@ -1302,61 +1042,31 @@ struct CreateSplitBillView: View {
                     .joined(separator: ", ")
                 let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
                 let itemTotal = item.price * Double(item.quantity)
-                notesText += "• \(qtyPrefix)\(item.name) (\(currency) \(Int(item.price))"
+                finalNotes += "• \(qtyPrefix)\(item.name) (\(currency) \(Int(item.price))"
                 if item.quantity > 1 {
-                    notesText += " @ \(currency) \(Int(itemTotal))"
+                    finalNotes += " @ \(currency) \(Int(itemTotal))"
                 }
-                notesText += "): \(participantNames)\n"
+                finalNotes += "): \(participantNames)\n"
             }
         }
 
-        if taxAmount > 0 || serviceCharge > 0 || discount > 0 {
-            notesText += "\nBiaya Tambahan:\n"
-            if taxAmount > 0 {
-                notesText += "• Pajak/PPN: \(currency) \(Int(taxAmount))\n"
-            }
-            if serviceCharge > 0 {
-                notesText += "• Service Charge: \(currency) \(Int(serviceCharge))\n"
-            }
-            if discount > 0 {
-                notesText += "• Diskon: -\(currency) \(Int(discount))\n"
-            }
-        }
-
-        // Get payer info (fallback to current user if not set)
-        let payerUID = paidByParticipant?.uid ?? user.uid
-        let payerName = paidByParticipant?.name ?? user.displayName
-
-        // Get bank account info (only for current user)
-        var ownerBankAccount: String? = nil
-        if payerUID == user.uid, let bankInfo = user.bankInfo {
-            ownerBankAccount = "\(bankInfo.bankName) - \(bankInfo.accountNumber) a.n. \(bankInfo.accountName)"
-        }
-
-        _ = await splitBillVM.createSplitBill(
-            ownerUID: user.uid,
-            ownerName: user.displayName,
-            ownerBankAccount: ownerBankAccount,
-            paidByUID: payerUID,
-            paidByName: payerName,
+        await expenseVM.addExpense(
+            tripID: trip.id ?? "",
             title: title,
-            totalAmount: totalAmount,
+            amount: calculatedTotal,
             currency: currency,
-            participants: billParticipants,
-            source: source,
             category: category,
-            notes: notesText.trimmingCharacters(in: .whitespacesAndNewlines),
-            receiptURL: receiptURL
+            paidByUID: user.uid,
+            paidByName: user.displayName,
+            splitType: .custom,  // Always use custom for item-based
+            members: trip.members,
+            customSplits: finalSplits,
+            notes: finalNotes.trimmingCharacters(in: .whitespacesAndNewlines),
+            receiptImage: receiptImage
         )
 
-        print("✅ [CreateSplitBillView] Split bill saved successfully!")
-
-        // Hide loading overlay
-        await MainActor.run {
-            showLoadingOverlay = false
-        }
-
-        dismiss()
+        print("✅ [CreateExpenseFromReceiptView] Expense saved successfully!")
+        isAddingExpense = false
     }
 
     // MARK: - Helper: Parse Date
@@ -1372,43 +1082,6 @@ struct CreateSplitBillView: View {
         formatter.dateStyle = .medium
         formatter.locale = Locale(identifier: "id_ID")
         return formatter.string(from: date)
-    }
-
-    // MARK: - Helper: Handle Next Step
-    private func handleNextStep() {
-        // Check bank account before moving from step 2 to step 3
-        if step == 2 {
-            if checkBankAccountBeforeContinue() {
-                // Show alert - user must fill bank account
-                showBankAccountAlert = true
-                print("⚠️ [CreateSplitBillView] Payer doesn't have bank account - showing alert")
-                return
-            }
-        }
-
-        // Proceed to next step
-        withAnimation { step += 1 }
-    }
-
-    // MARK: - Helper: Check Bank Account Before Continue
-    private func checkBankAccountBeforeContinue() -> Bool {
-        guard let payer = paidByParticipant else { return false }
-
-        // Only check for current user (we don't have bank info for friends)
-        if payer.uid == authVM.currentUser?.uid {
-            // Check if current user has bank account info
-            if authVM.currentUser?.bankInfo == nil ||
-               authVM.currentUser?.bankInfo?.accountNumber.isEmpty == true {
-                // Return true = needs to fill bank account
-                return true
-            } else {
-                print("✅ [CreateSplitBillView] Payer has bank account: \(authVM.currentUser?.bankInfo?.accountNumber ?? "")")
-                return false
-            }
-        }
-
-        // For friends, we don't check (return false = can continue)
-        return false
     }
 
     // MARK: - Edit Item Sheet
@@ -1495,5 +1168,3 @@ struct CreateSplitBillView: View {
         .presentationDetents([.medium])
     }
 }
-
-// FlowLayout moved to TripLedger/Views/Shared/FlowLayout.swift

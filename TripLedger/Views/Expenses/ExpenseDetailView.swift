@@ -11,9 +11,19 @@ struct ExpenseDetailView: View {
     @State private var showDeleteAlert = false
     @State private var isEditing = false
     @State private var showFullScreenReceipt = false
-    
+    @State private var showShareSheet = false
+    @State private var pdfURL: URL?
+
     private var isOwner: Bool {
         expense.paidByUID == authVM.currentUser?.uid
+    }
+
+    private var paidAmount: Double {
+        expense.splits.filter { $0.isPaid == true }.reduce(0) { $0 + $1.amount }
+    }
+
+    private var isFullySettled: Bool {
+        expense.splits.allSatisfy { $0.isPaid == true }
     }
     
     var body: some View {
@@ -26,26 +36,27 @@ struct ExpenseDetailView: View {
                     // MARK: - Header (Category & Amount)
                     VStack(spacing: 12) {
                         ZStack {
-                            Circle()
-                                .fill(Color(hex: expense.category.color).opacity(0.18))
-                                .frame(width: 80, height: 80)
+                            RoundedRectangle(cornerRadius: AppRadius.xl)
+                                .fill(Color(hex: expense.category.color).opacity(0.12))
+                                .frame(width: 64, height: 64)
                             Image(systemName: expense.category.icon)
-                                .font(.system(size: 32))
+                                .font(.system(size: 28))
                                 .foregroundColor(Color(hex: expense.category.color))
                         }
-                        
-                        Text(expense.title)
-                            .font(AppFont.title2())
-                            .foregroundColor(.textPrimary)
-                            .multilineTextAlignment(.center)
-                        
+
+                        VStack(spacing: 4) {
+                            Text(expense.title)
+                                .font(AppFont.title3())
+                                .foregroundColor(.textPrimary)
+                                .multilineTextAlignment(.center)
+                            Text("dibayar oleh \(expense.paidByName)")
+                                .font(AppFont.subheadline())
+                                .foregroundColor(.textPrimary.opacity(0.6))
+                        }
+
                         Text(expense.amount.toCurrency(symbol: currency))
-                            .font(AppFont.largeTitle())
+                            .font(AppFont.title1())
                             .foregroundColor(.brandPrimary)
-                        
-                        Text("Dibayar oleh \(expense.paidByName)")
-                            .font(AppFont.subheadline())
-                            .foregroundColor(.textPrimary.opacity(0.6))
                     }
                     .padding(.top, 24)
                     
@@ -127,27 +138,38 @@ struct ExpenseDetailView: View {
                         .padding(.horizontal, 20)
                     }
                     
-                    // MARK: - Notes
-                    if let notes = expense.notes, !notes.isBlank {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Catatan")
-                                .font(AppFont.headline())
-                                .foregroundColor(.textPrimary)
-                            Text(notes)
+                    // MARK: - Progress Bar
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Terkumpul")
                                 .font(AppFont.subheadline())
                                 .foregroundColor(.textPrimary.opacity(0.8))
-                                .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.textPrimary.opacity(0.04))
-                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                            Spacer()
+                            Text("\(paidAmount.toCurrency(symbol: currency)) / \(expense.amount.toCurrency(symbol: currency))")
+                                .font(AppFont.headline())
+                                .foregroundColor(.textPrimary)
                         }
-                        .padding(.horizontal, 20)
+
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.textPrimary.opacity(0.1))
+                                    .frame(height: 8)
+
+                                let ratio = expense.amount > 0 ? (paidAmount / expense.amount) : 0
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(isFullySettled ? Color.successGreen : Color.brandPrimary)
+                                    .frame(width: max(0, proxy.size.width * CGFloat(ratio)), height: 8)
+                            }
+                        }
+                        .frame(height: 8)
                     }
-                    
-                    // MARK: - Splits
+                    .padding(.horizontal, 20)
+
+                    // MARK: - Participants List
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Rincian Patungan (\(expense.splitType == .equally ? "Bagi Rata" : "Nominal Custom"))")
+                            Text("Daftar Patungan")
                                 .font(AppFont.headline())
                                 .foregroundColor(.textPrimary)
                             Spacer()
@@ -167,7 +189,7 @@ struct ExpenseDetailView: View {
                                 }
                             }
                         }
-                        
+
                         VStack(spacing: 8) {
                             ForEach(expense.splits) { split in
                                 ExpenseParticipantRow(
@@ -182,9 +204,34 @@ struct ExpenseDetailView: View {
                         }
                     }
                     .padding(.horizontal, 20)
+
+                    // MARK: - Share Button
+                    Button {
+                        generateAndSharePDF()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 20))
+                            Text("Bagikan Tagihan")
+                                .font(AppFont.subheadline())
+                                .fontWeight(.medium)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.brandPrimary)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    }
+                    .padding(.horizontal, 20)
                     
                     Spacer().frame(height: 40)
+                    Spacer().frame(height: 40)
                 }
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = pdfURL {
+                ShareSheet(items: [url])
             }
         }
         .fullScreenCover(isPresented: $showFullScreenReceipt) {
@@ -199,6 +246,7 @@ struct ExpenseDetailView: View {
         }
         .navigationTitle("Detail Pengeluaran")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if expense.paidByUID == authVM.currentUser?.uid {
@@ -227,6 +275,21 @@ struct ExpenseDetailView: View {
             }
         } message: {
             Text("Pengeluaran ini akan dihapus secara permanen.")
+        }
+    }
+
+    private func generateAndSharePDF() {
+        // Generate PDF using PDFGenerator
+        if let url = PDFGenerator.generateExpensePDF(
+            expense: expense,
+            currency: currency,
+            paidAmount: paidAmount,
+            isFullySettled: isFullySettled
+        ) {
+            pdfURL = url
+            showShareSheet = true
+        } else {
+            print("❌ Failed to generate PDF")
         }
     }
 }

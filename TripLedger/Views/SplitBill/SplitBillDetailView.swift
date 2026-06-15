@@ -11,6 +11,7 @@ struct SplitBillDetailView: View {
     @State private var isEditing = false
     @State private var showShareSheet = false
     @State private var showFullScreenReceipt = false
+    @State private var pdfURL: URL?
     
     private var isOwner: Bool {
         bill.ownerUID == authVM.currentUser?.uid
@@ -189,12 +190,12 @@ struct SplitBillDetailView: View {
 
                         // MARK: - Share Button
                         Button {
-                            showShareSheet = true
+                            generateAndSharePDF()
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "square.and.arrow.up")
                                     .font(.system(size: 20))
-                                Text("Share Tagihan")
+                                Text("Bagikan Tagihan")
                                     .font(AppFont.subheadline())
                                     .fontWeight(.medium)
                             }
@@ -254,35 +255,21 @@ struct SplitBillDetailView: View {
             }
         }
         .sheet(isPresented: $showShareSheet) {
-            if let shareText = generateShareText() {
-                ShareSheet(items: [shareText])
+            if let url = pdfURL {
+                ShareSheet(items: [url])
             }
         }
     }
 
-    // MARK: - Generate Share Text
-    private func generateShareText() -> String? {
-        guard let billID = bill.id else {
-            print("❌ [Share] Bill ID is nil")
-            return nil
+    // MARK: - Generate and Share PDF
+    private func generateAndSharePDF() {
+        // Generate PDF using PDFGenerator
+        if let url = PDFGenerator.generateSplitBillPDF(bill: bill) {
+            pdfURL = url
+            showShareSheet = true
+        } else {
+            print("❌ Failed to generate PDF")
         }
-
-        // Generate web link (ganti domain sesuai Vercel deployment nanti)
-        let webURL = "https://trip-ledger-website.vercel.app/bill/\(billID)"
-
-        // Create message
-        let message = """
-        Halo! Lihat detail tagihan patungan ini:
-
-        📄 \(bill.title)
-        💰 Total: \(bill.totalAmount.toCurrency(symbol: bill.currency))
-        👥 Peserta: \(bill.participants.count) orang
-
-        Klik link untuk detail lengkap:
-        \(webURL)
-        """
-
-        return message
     }
 }
 

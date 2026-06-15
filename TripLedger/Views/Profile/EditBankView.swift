@@ -103,8 +103,22 @@ struct EditBankView: View {
                 .padding(.bottom, 24)
             }
         }
+        .dismissKeyboardOnTap()
         .navigationTitle("Info Rekening")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.textSecondary)
+                }
+            }
+        }
         .onAppear {
             let bank = authVM.currentUser?.bankInfo
             bankName = bank?.bankName ?? ""

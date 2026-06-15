@@ -2,11 +2,6 @@ import Foundation
 import Combine
 import FirebaseFirestore
 
-// MARK: - Firestore Collection
-extension Collection {
-    static let splitBills = "splitBills"
-}
-
 @MainActor
 final class SplitBillViewModel: ObservableObject {
 
@@ -87,16 +82,19 @@ final class SplitBillViewModel: ObservableObject {
 
     // MARK: - Create split bill
     func createSplitBill(
-        ownerUID:     String,
-        ownerName:    String,
-        title:        String,
-        totalAmount:  Double,
-        currency:     String,
-        participants: [SplitBillParticipant],
-        source:       SplitBillSource,
-        category:     ExpenseCategory? = nil,
-        notes:        String? = nil,
-        receiptURL:   String? = nil
+        ownerUID:        String,
+        ownerName:       String,
+        ownerBankAccount: String? = nil,
+        paidByUID:       String,
+        paidByName:      String,
+        title:           String,
+        totalAmount:     Double,
+        currency:        String,
+        participants:    [SplitBillParticipant],
+        source:          SplitBillSource,
+        category:        ExpenseCategory? = nil,
+        notes:           String? = nil,
+        receiptURL:      String? = nil
     ) async -> SplitBillModel? {
         isLoading = true
         defer { isLoading = false }
@@ -111,6 +109,8 @@ final class SplitBillViewModel: ObservableObject {
 
         let bill = SplitBillModel(
             ownerUID: ownerUID, ownerName: ownerName,
+            ownerBankAccount: ownerBankAccount,
+            paidByUID: paidByUID, paidByName: paidByName,
             title: title, totalAmount: totalAmount, currency: currency,
             participants: participants, participantUIDs: participantUIDs,
             source: source,

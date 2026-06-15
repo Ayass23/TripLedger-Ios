@@ -13,7 +13,7 @@ struct HomeView: View {
     @State private var tripPendingExpenses: [ExpenseModel] = []
 
     /// Maximum trips to show on home before "See All"
-    private let maxTripsOnHome = 5
+    private let maxTripsOnHome = 3
 
     var body: some View {
         NavigationStack {
@@ -250,7 +250,7 @@ struct HomeView: View {
 
                 Spacer()
 
-                if (tripVM.activeTrips.count + tripVM.historyTrips.count) > maxTripsOnHome {
+                if (tripVM.plannedTrips.count + tripVM.activeTrips.count + tripVM.historyTrips.count) > maxTripsOnHome {
                     NavigationLink(destination: AllTripsView()) {
                         HStack(spacing: 4) {
                             Text("See All")
@@ -282,7 +282,7 @@ struct HomeView: View {
     }
 
     private var allTrips: [TripModel] {
-        tripVM.activeTrips + tripVM.historyTrips
+        tripVM.plannedTrips + tripVM.activeTrips + tripVM.historyTrips
     }
 
     private var emptyTripsView: some View {
@@ -387,6 +387,7 @@ struct TripCard: View {
 
     private var statusColor: Color {
         switch trip.status {
+        case .planned:  return .brandAccent
         case .active:   return .successGreen
         case .finished: return .textPrimary.opacity(0.4)
         case .deleted:  return .errorRed
@@ -395,6 +396,7 @@ struct TripCard: View {
 
     private var statusLabel: String {
         switch trip.status {
+        case .planned:  return "Direncanakan"
         case .active:   return "Aktif"
         case .finished: return "Selesai"
         case .deleted:  return "Dihapus"

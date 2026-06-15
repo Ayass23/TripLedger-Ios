@@ -268,6 +268,8 @@ struct FriendRequestRow: View {
     @ObservedObject var friendsVM: FriendsViewModel
     @ObservedObject var authVM: AuthViewModel
     @State private var isProcessing = false
+    @State private var showSuccessAlert = false
+    @State private var alertMessage = ""
 
     var body: some View {
         HStack(spacing: 12) {
@@ -304,6 +306,13 @@ struct FriendRequestRow: View {
                                 return
                             }
                             await friendsVM.declineFriendRequest(requestID: requestID, currentUser: user)
+
+                            // Show alert if successful
+                            if friendsVM.errorMessage == nil {
+                                alertMessage = "Permintaan pertemanan dari \(request.fromName) telah ditolak."
+                                showSuccessAlert = true
+                            }
+
                             isProcessing = false
                         }
                     } label: {
@@ -333,6 +342,10 @@ struct FriendRequestRow: View {
                             // Reload friends if no error
                             if friendsVM.errorMessage == nil, let updatedUser = authVM.currentUser {
                                 await friendsVM.loadFriends(currentUser: updatedUser)
+
+                                // Show success alert
+                                alertMessage = "Sekarang kamu dan \(request.fromName) sudah berteman! 🎉"
+                                showSuccessAlert = true
                             }
 
                             isProcessing = false
@@ -360,6 +373,11 @@ struct FriendRequestRow: View {
                 .stroke(Color.brandPrimary.opacity(0.2), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.05), radius: 4, y: 2)
+        .alert("Permintaan Pertemanan", isPresented: $showSuccessAlert) {
+            Button("OK") { }
+        } message: {
+            Text(alertMessage)
+        }
     }
 
     private func timeAgo(from timestamp: Timestamp) -> String {

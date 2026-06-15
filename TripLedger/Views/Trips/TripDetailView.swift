@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseCore
+import FirebaseFirestore
 
 struct TripDetailView: View {
     let trip: TripModel
@@ -7,25 +8,76 @@ struct TripDetailView: View {
     @EnvironmentObject private var authVM:    AuthViewModel
     @EnvironmentObject private var tripVM:    TripViewModel
     @StateObject private var expenseVM = ExpenseViewModel()
-    @StateObject private var debtVM    = DebtViewModel()
     @Environment(\.dismiss) private var dismiss
+
+    // Real-time trip data
+    @State private var currentTrip: TripModel
+    @State private var tripListener: ListenerRegistration?
+
     @State private var showSettlement  = false
     @State private var showReport      = false
     @State private var showDeleteAlert = false
     @State private var showLeaveAlert  = false
+    @State private var showFinishAlert = false
+    @State private var showFinishSuccess = false
     @State private var showInvite      = false
     @State private var showKickAlert   = false
+    @State private var showEditTrip    = false
     @State private var memberToKick:   TripMember?
     @State private var selectedTab     = 0
     @State private var isAddingExpense = false
 
+    init(trip: TripModel) {
+        self.trip = trip
+        _currentTrip = State(initialValue: trip)
+    }
+
     private var isOwner: Bool {
-        trip.ownerUID == authVM.currentUser?.uid
+        currentTrip.ownerUID == authVM.currentUser?.uid
     }
 
     private var isAdmin: Bool {
         guard let uid = authVM.currentUser?.uid else { return false }
-        return trip.adminUIDs.contains(uid)
+        return currentTrip.adminUIDs.contains(uid)
+    }
+
+    private var statusColor: Color {
+        switch currentTrip.status {
+        case .planned:  return .brandAccent
+        case .active:   return .successGreen
+        case .finished: return .textPrimary.opacity(0.35)
+        case .deleted:  return .errorRed
+        }
+    }
+
+    private var statusText: String {
+        switch currentTrip.status {
+        case .planned:  return "Direncanakan"
+        case .active:   return "Aktif"
+        case .finished: return "Selesai"
+        case .deleted:  return "Dihapus"
+        }
+    }
+
+    private var tripHasEnded: Bool {
+        guard let endDate = currentTrip.endDate?.dateValue() else { return false }
+        let today = Calendar.current.startOfDay(for: Date())
+        let tripEnd = Calendar.current.startOfDay(for: endDate)
+        return tripEnd < today
+    }
+
+    private var finishAlertMessage: String {
+        if tripHasEnded {
+            return "Trip \"\(currentTrip.name)\" akan ditandai sebagai selesai. Kamu masih bisa melihat riwayat trip ini."
+        } else if let endDate = currentTrip.endDate?.dateValue() {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "id_ID")
+            formatter.dateFormat = "d MMMM yyyy"
+            let dateStr = formatter.string(from: endDate)
+            return "Trip ini dijadwalkan sampai \(dateStr). Kamu masih bisa selesaikan sekarang jika sudah tidak diperlukan."
+        } else {
+            return "Trip \"\(currentTrip.name)\" akan ditandai sebagai selesai. Kamu masih bisa melihat riwayat trip ini."
+        }
     }
 
     var body: some View {
@@ -39,13 +91,12 @@ struct TripDetailView: View {
                 TabView(selection: $selectedTab) {
                     detailsTab.tag(0)
                     expensesTab.tag(1)
-                    debtTab.tag(2)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
 
             // FAB — only on Expenses tab
-            if selectedTab == 1 && trip.isActive {
+            if selectedTab == 1 && currentTrip.isActive {
                 Button {
                     isAddingExpense = true
                 } label: {
@@ -58,7 +109,7 @@ struct TripDetailView: View {
                         .shadow(color: Color.primaryFallback.opacity(0.45), radius: 12)
                 }
                 .navigationDestination(isPresented: $isAddingExpense) {
-                    AddExpenseMethodView(trip: trip, isAddingExpense: $isAddingExpense)
+                    AddExpenseMethodView(trip: currentTrip, isAddingExpense: $isAddingExpense)
                         .environmentObject(authVM)
                         .environmentObject(expenseVM)
                 }
@@ -66,15 +117,20 @@ struct TripDetailView: View {
                 .padding(.bottom, 24)
             }
         }
-        .navigationTitle("Trip Details")
+        .navigationTitle("Detail Trip")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
+                    if isOwner || isAdmin {
+                        Button { showEditTrip = true } label: {
+                            Label("Edit Trip", systemImage: "pencil")
+                        }
+                    }
                     Button { showReport = true } label: {
                         Label("Laporan", systemImage: "chart.bar.fill")
                     }
-                    if trip.isActive {
+                    if currentTrip.isActive {
                         Button { showSettlement = true } label: {
                             Label("Settlement", systemImage: "banknote.fill")
                         }
@@ -94,24 +150,32 @@ struct TripDetailView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle.fill")
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.textPrimary.opacity(0.7))
                 }
             }
         }
         .onAppear {
             expenseVM.listenExpenses(tripID: trip.id ?? "")
-            debtVM.listenSettlements(tripID: trip.id ?? "")
+            listenToTripUpdates()
+        }
+        .onDisappear {
+            tripListener?.remove()
         }
         .sheet(isPresented: $showSettlement) {
-            SettlementView(trip: trip)
+            SettlementView(trip: currentTrip)
                 .environmentObject(authVM)
                 .environmentObject(expenseVM)
-                .environmentObject(debtVM)
         }
         .sheet(isPresented: $showReport) {
-            ReportView(trip: trip)
+            ReportView(trip: currentTrip)
                 .environmentObject(expenseVM)
+        }
+        .sheet(isPresented: $showEditTrip) {
+            EditTripView(trip: currentTrip)
+                .environmentObject(authVM)
+                .environmentObject(tripVM)
         }
         .alert("Hapus Trip?", isPresented: $showDeleteAlert) {
             Button("Batal", role: .cancel) {}
@@ -123,7 +187,7 @@ struct TripDetailView: View {
                 }
             }
         } message: {
-            Text("Trip \"\(trip.name)\" akan dihapus secara permanen. Tindakan ini tidak bisa dibatalkan.")
+            Text("Trip \"\(currentTrip.name)\" akan dihapus secara permanen. Tindakan ini tidak bisa dibatalkan.")
         }
         .alert("Keluar dari Trip?", isPresented: $showLeaveAlert) {
             Button("Batal", role: .cancel) {}
@@ -135,7 +199,7 @@ struct TripDetailView: View {
                 }
             }
         } message: {
-            Text("Anda akan keluar dari trip \"\(trip.name)\" dan tidak bisa mengaksesnya lagi kecuali diundang kembali.")
+            Text("Anda akan keluar dari trip \"\(currentTrip.name)\" dan tidak bisa mengaksesnya lagi kecuali diundang kembali.")
         }
         .alert("Keluarkan Anggota?", isPresented: $showKickAlert) {
             Button("Batal", role: .cancel) { memberToKick = nil }
@@ -148,6 +212,25 @@ struct TripDetailView: View {
         } message: {
             Text("Anggota \"\(memberToKick?.displayName ?? "")\" akan dikeluarkan dari trip ini.")
         }
+        .alert("Selesaikan Trip?", isPresented: $showFinishAlert) {
+            Button("Batal", role: .cancel) {}
+            Button("Selesaikan") {
+                Task {
+                    guard let tripID = currentTrip.id else { return }
+                    await tripVM.finishTrip(tripID: tripID, trip: currentTrip, currentUser: authVM.currentUser)
+                    showFinishSuccess = true
+                }
+            }
+        } message: {
+            Text(finishAlertMessage)
+        }
+        .alert("Selamat! 🎉", isPresented: $showFinishSuccess) {
+            Button("OK") {
+                dismiss()
+            }
+        } message: {
+            Text("Trip \"\(currentTrip.name)\" sudah selesai. Terima kasih sudah berpetualang bersama!")
+        }
     }
 
     // MARK: - Native Segmented Picker
@@ -155,7 +238,6 @@ struct TripDetailView: View {
         Picker("Menu", selection: $selectedTab) {
             Text("Details").tag(0)
             Text("Expenses").tag(1)
-            Text("Hutang").tag(2)
         }
         .pickerStyle(.segmented)
         .padding(.horizontal, 16)
@@ -178,9 +260,38 @@ struct TripDetailView: View {
 
                 // Members Section
                 membersSection
+
+                // Finish Trip Button (Owner only, Active trips only)
+                if isOwner && currentTrip.isActive {
+                    finishTripButton
+                }
+
+                Spacer().frame(height: 20)
             }
             .padding(16)
         }
+    }
+
+    // MARK: - Helper Functions
+    private func listenToTripUpdates() {
+        guard let tripID = trip.id else { return }
+        let db = FirestoreService.shared.db
+
+        tripListener = db.collection(Collection.trips)
+            .document(tripID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error listening to trip updates: \(error)")
+                    return
+                }
+
+                guard let snapshot = snapshot,
+                      let updatedTrip = try? snapshot.data(as: TripModel.self) else {
+                    return
+                }
+
+                currentTrip = updatedTrip
+            }
     }
 
     private var tripInfoCard: some View {
@@ -188,7 +299,7 @@ struct TripDetailView: View {
             // Top row: Emoji kiri | Nama + Status kanan
             HStack(alignment: .center, spacing: 16) {
                 // Cover Emoji
-                Text(trip.coverEmoji)
+                Text(currentTrip.coverEmoji)
                     .font(.system(size: 48))
                     .frame(width: 72, height: 72)
                     .background(Color.textPrimary.opacity(0.06))
@@ -205,15 +316,15 @@ struct TripDetailView: View {
                     // Status badge
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(trip.isActive ? Color.successGreen : Color.textPrimary.opacity(0.35))
+                            .fill(statusColor)
                             .frame(width: 7, height: 7)
-                        Text(trip.isActive ? "Aktif" : "Selesai")
+                        Text(statusText)
                             .font(AppFont.caption())
-                            .foregroundColor(trip.isActive ? .successGreen : .textPrimary.opacity(0.5))
+                            .foregroundColor(statusColor)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
-                    .background(trip.isActive ? Color.successGreen.opacity(0.1) : Color.textPrimary.opacity(0.06))
+                    .background(statusColor.opacity(0.1))
                     .clipShape(Capsule())
                 }
 
@@ -386,6 +497,30 @@ struct TripDetailView: View {
         }
     }
 
+    // MARK: - Finish Trip Button
+    private var finishTripButton: some View {
+        Button {
+            showFinishAlert = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "flag.pattern.checkered")
+                    .font(.system(size: 16, weight: .semibold))
+                Text("Selesaikan Trip")
+                    .font(AppFont.headline())
+                    .fontWeight(.semibold)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                (LinearGradient.brandGradient)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: Color.purple.opacity(0.3), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+    }
+
     @ViewBuilder
     private func roleBadge(_ role: TripMemberRole) -> some View {
         if role == .pending {
@@ -466,94 +601,6 @@ struct TripDetailView: View {
         formatter.locale = Locale(identifier: "id_ID")
         formatter.dateFormat = "EEEE, d MMMM yyyy" // "Rabu, 25 Juli 2026"
         return formatter.string(from: date)
-    }
-
-    // MARK: - Debt Tab (Pending Bills / Hutang)
-    private var debtTab: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Recalculate button
-                Button {
-                    debtVM.computeDebts(expenses: expenseVM.expenses, members: trip.members, currency: trip.currency)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise")
-                        Text("Hitung Ulang Hutang")
-                    }
-                    .font(AppFont.subheadline())
-                    .foregroundColor(.brandAccent)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.brandAccent.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-
-                if debtVM.transactions.isEmpty {
-                    emptyState(icon: "checkmark.seal.fill", text: "Semua lunas! 🎉", sub: "Tidak ada hutang tersisa.")
-                } else {
-                    // MARK: Section 1 — My Unpaid Debts
-                    let myDebts = debtVM.transactions.filter { $0.fromUID == authVM.currentUser?.uid }
-                    if !myDebts.isEmpty {
-                        debtSectionHeader(title: "Hutang Kamu", subtitle: "Belum dibayar", icon: "exclamationmark.triangle.fill", color: .warningAmber)
-
-                        LazyVStack(spacing: 10) {
-                            ForEach(myDebts) { tx in
-                                MyDebtRow(transaction: tx, currency: trip.currency)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
-                    }
-
-                    // MARK: Section 2 — All Debts
-                    debtSectionHeader(title: "Semua Hutang", subtitle: "Ringkasan semua anggota", icon: "list.bullet.rectangle", color: .brandPrimary)
-
-                    LazyVStack(spacing: 10) {
-                        ForEach(debtVM.transactions) { tx in
-                            DebtRow(transaction: tx, currency: trip.currency)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-
-                    // MARK: - Settlements
-                    if !debtVM.settlements.isEmpty {
-                        debtSectionHeader(title: "Riwayat Pembayaran", subtitle: "Hutang sudah dibayar", icon: "checkmark.circle.fill", color: .successGreen)
-
-                        LazyVStack(spacing: 10) {
-                            ForEach(debtVM.settlements) { settlement in
-                                SettlementRow(settlement: settlement)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 24)
-                    }
-                }
-            }
-        }
-    }
-
-    private func debtSectionHeader(title: String, subtitle: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundColor(color)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(AppFont.subheadline())
-                    .foregroundColor(.textPrimary)
-                Text(subtitle)
-                    .font(AppFont.caption2())
-                    .foregroundColor(.textPrimary.opacity(0.4))
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
     }
 
     private func emptyState(icon: String, text: String, sub: String) -> some View {

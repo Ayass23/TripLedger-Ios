@@ -265,10 +265,15 @@ struct AddParticipantView: View {
 
     // MARK: - Helper Properties
     private var filteredFriends: [UserModel] {
-        if searchQuery.isEmpty {
-            return friendsVM.friends
+        // Filter out current user from the list
+        let friendsExcludingSelf = friendsVM.friends.filter { friend in
+            friend.uid != authVM.currentUser?.uid
         }
-        return friendsVM.friends.filter { friend in
+
+        if searchQuery.isEmpty {
+            return friendsExcludingSelf
+        }
+        return friendsExcludingSelf.filter { friend in
             friend.displayName.localizedCaseInsensitiveContains(searchQuery)
         }
     }

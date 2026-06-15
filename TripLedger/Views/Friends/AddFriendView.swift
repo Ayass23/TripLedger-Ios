@@ -7,6 +7,7 @@ struct AddFriendView: View {
 
     @State private var searchQuery = ""
     @State private var selectedUsers: Set<String> = [] // UIDs of selected users
+    @State private var selectedUserModels: [UserModel] = [] // Full user models for selected users
     @State private var isLoading = false
     @State private var showSuccess = false
     @State private var successMessage = ""
@@ -122,6 +123,12 @@ struct AddFriendView: View {
                     friendsVM.searchResults = []
                 }
             }
+            .task {
+                // Load pending requests when view appears
+                guard let currentUser = authVM.currentUser else { return }
+                await friendsVM.loadOutgoingRequests(currentUID: currentUser.uid)
+                await friendsVM.loadPendingRequests(currentUser: currentUser)
+            }
         }
     }
 
@@ -138,6 +145,7 @@ struct AddFriendView: View {
                     ForEach(getSelectedUserModels(), id: \.uid) { user in
                         SelectedUserChip(user: user) {
                             selectedUsers.remove(user.uid)
+                            selectedUserModels.removeAll { $0.uid == user.uid }
                         }
                     }
                 }
@@ -156,7 +164,9 @@ struct AddFriendView: View {
                         user: user,
                         isSelected: selectedUsers.contains(user.uid),
                         currentUserUID: authVM.currentUser?.uid ?? "",
-                        currentUserFriends: authVM.currentUser?.friendUIDs ?? []
+                        currentUserFriends: authVM.currentUser?.friendUIDs ?? [],
+                        outgoingRequests: friendsVM.outgoingRequests,
+                        incomingRequests: friendsVM.pendingRequests
                     ) {
                         toggleUserSelection(user)
                     }
@@ -179,7 +189,7 @@ struct AddFriendView: View {
                 .font(AppFont.headline())
                 .foregroundColor(.textPrimary)
 
-            Text("Ketik nama atau email untuk mencari teman")
+            Text("Ketik username untuk mencari teman")
                 .font(AppFont.subheadline())
                 .foregroundColor(.textSecondary)
                 .multilineTextAlignment(.center)
@@ -257,14 +267,16 @@ struct AddFriendView: View {
     }
 
     private func getSelectedUserModels() -> [UserModel] {
-        friendsVM.searchResults.filter { selectedUsers.contains($0.uid) }
+        selectedUserModels
     }
 
     private func toggleUserSelection(_ user: UserModel) {
         if selectedUsers.contains(user.uid) {
             selectedUsers.remove(user.uid)
+            selectedUserModels.removeAll { $0.uid == user.uid }
         } else {
             selectedUsers.insert(user.uid)
+            selectedUserModels.append(user)
         }
     }
 
@@ -279,10 +291,10 @@ struct AddFriendView: View {
         isLoading = true
 
         Task {
-            let selectedUserModels = getSelectedUserModels()
+            let usersToSend = getSelectedUserModels()
             var successCount = 0
 
-            for user in selectedUserModels {
+            for user in usersToSend {
                 await friendsVM.sendRequest(from: currentUser, to: user)
                 if friendsVM.errorMessage == nil {
                     successCount += 1
@@ -297,6 +309,7 @@ struct AddFriendView: View {
                     "\(successCount) permintaan pertemanan berhasil dikirim"
                 showSuccess = true
                 selectedUsers.removeAll()
+                selectedUserModels.removeAll()
                 searchQuery = ""
                 friendsVM.searchResults = []
             }
@@ -348,24 +361,39 @@ struct SearchResultRow: View {
     let isSelected: Bool
     let currentUserUID: String
     let currentUserFriends: [String]
+    let outgoingRequests: [FriendRequest]
+    let incomingRequests: [FriendRequest]
     let onTap: () -> Void
 
     private var relationshipStatus: RelationshipStatus {
+        // Check if already friends
         if currentUserFriends.contains(user.uid) {
             return .friend
         }
-        // TODO: Check if there's a pending request
+
+        // Check if there's an outgoing pending request to this user
+        if outgoingRequests.contains(where: { $0.toUID == user.uid }) {
+            return .pendingOutgoing
+        }
+
+        // Check if there's an incoming pending request from this user
+        if incomingRequests.contains(where: { $0.fromUID == user.uid }) {
+            return .pendingIncoming
+        }
+
         return .none
     }
 
     enum RelationshipStatus {
         case friend
-        case pending
+        case pendingOutgoing    // We sent request to them
+        case pendingIncoming    // They sent request to us
         case none
     }
 
     var body: some View {
         Button {
+            // Only allow selection if no relationship exists
             if relationshipStatus == .none {
                 onTap()
             }
@@ -428,13 +456,21 @@ struct SearchResultRow: View {
                         .padding(.vertical, 4)
                         .background(Color.successGreen.opacity(0.15))
                         .clipShape(Capsule())
-                } else if relationshipStatus == .pending {
+                } else if relationshipStatus == .pendingOutgoing {
                     Text("Menunggu")
                         .font(AppFont.caption2())
                         .foregroundColor(.warningAmber)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.warningAmber.opacity(0.15))
+                        .clipShape(Capsule())
+                } else if relationshipStatus == .pendingIncoming {
+                    Text("Sudah Mengirim")
+                        .font(AppFont.caption2())
+                        .foregroundColor(.brandPrimary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.brandPrimary.opacity(0.15))
                         .clipShape(Capsule())
                 }
             }
@@ -455,6 +491,7 @@ struct SearchResultRow: View {
                         lineWidth: 1
                     )
             )
+            .opacity(relationshipStatus != .none ? 0.6 : 1.0)
         }
         .disabled(relationshipStatus != .none)
     }

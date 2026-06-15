@@ -21,6 +21,7 @@ struct CreateTripView: View {
     @State private var searchQuery  = ""
     @State private var selectedMembers: [UserModel] = []
     @State private var isCreating = false
+    @State private var showSuccessAlert = false
 
     private let emojiOptions = ["🏝️","🏔️","🌆","🚢","🎡","🌴","🗺️","✈️","🏕️","🌊"]
     private let currencies   = ["IDR","USD","EUR","SGD","MYR","JPY","AUD"]
@@ -53,6 +54,13 @@ struct CreateTripView: View {
                 Task { await friendsVM.loadFriends(currentUser: user) }
             }
         }
+        .alert("Trip Berhasil Dibuat! 🎉", isPresented: $showSuccessAlert) {
+            Button("OK") {
+                dismiss()
+            }
+        } message: {
+            Text("Trip \"\(name)\" berhasil dibuat. Selamat berpetualang!")
+        }
     }
 
     // ==========================================
@@ -69,53 +77,100 @@ struct CreateTripView: View {
                 emojiPickerSection
 
                 // Nama Trip
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Nama Trip", systemImage: "textformat")
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Nama Trip")
                         .font(AppFont.subheadline())
                         .foregroundColor(.textPrimary.opacity(0.6))
-                    TLTextField(icon: "mappin.and.ellipse", placeholder: "Contoh: Bali Squad 2026", text: $name)
+
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.brandPrimary.opacity(0.15))
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.system(size: 18))
+                                .foregroundColor(.brandPrimary)
+                        }
+
+                        TextField("Contoh: Bali Squad 2026", text: $name)
+                            .font(AppFont.subheadline())
+                            .foregroundColor(.textPrimary)
+                    }
+                    .padding(14)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(name.isEmpty ? Color.borderSoft : Color.brandPrimary.opacity(0.3), lineWidth: 1)
+                    )
                 }
 
                 // Tanggal Liburan
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Tanggal Liburan", systemImage: "calendar")
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Tanggal Liburan")
                         .font(AppFont.subheadline())
                         .foregroundColor(.textPrimary.opacity(0.6))
 
-                    VStack(spacing: 0) {
+                    VStack(spacing: 1) {
                         // Start date row
-                        HStack {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.successGreen.opacity(0.15))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "airplane.departure")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.successGreen)
+                            }
+
                             Text("Berangkat")
-                                .font(AppFont.body())
+                                .font(AppFont.subheadline())
                                 .foregroundColor(.textPrimary)
+
                             Spacer()
-                            DatePicker("", selection: $startDate, displayedComponents: .date)
+
+                            DatePicker("", selection: $startDate, in: Date()..., displayedComponents: .date)
                                 .labelsHidden()
                                 .tint(.brandPrimary)
                                 .onChange(of: startDate) { newVal in
                                     if endDate < newVal { endDate = newVal.addingTimeInterval(86400) }
                                 }
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
+                        .padding(14)
+                        .background(Color.cardFallback)
 
-                        Divider().padding(.horizontal, 14)
+                        Divider()
+                            .background(Color.borderSoft)
 
                         // End date row
-                        HStack {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.warningAmber.opacity(0.15))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "airplane.arrival")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.warningAmber)
+                            }
+
                             Text("Pulang")
-                                .font(AppFont.body())
+                                .font(AppFont.subheadline())
                                 .foregroundColor(.textPrimary)
+
                             Spacer()
+
                             DatePicker("", selection: $endDate, in: startDate..., displayedComponents: .date)
                                 .labelsHidden()
                                 .tint(.brandPrimary)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
+                        .padding(14)
+                        .background(Color.cardFallback)
                     }
-                    .background(Color.textPrimary.opacity(0.07))
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(Color.borderSoft, lineWidth: 1)
+                    )
                 }
 
                 // Mata Uang
@@ -319,22 +374,27 @@ struct CreateTripView: View {
 
     private var emojiPickerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Cover", systemImage: "photo.fill")
+            Text("Cover Trip")
                 .font(AppFont.subheadline())
                 .foregroundColor(.textPrimary.opacity(0.6))
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     ForEach(emojiOptions, id: \.self) { e in
                         Text(e)
-                            .font(.system(size: 28))
-                            .frame(width: 52, height: 52)
-                            .background(emoji == e ? Color.primaryFallback.opacity(0.3) : Color.textPrimary.opacity(0.06))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .font(.system(size: 32))
+                            .frame(width: 60, height: 60)
+                            .background(emoji == e ? Color.brandPrimary.opacity(0.15) : Color.cardFallback)
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(emoji == e ? Color.primaryFallback : Color.clear, lineWidth: 2)
+                                RoundedRectangle(cornerRadius: AppRadius.md)
+                                    .stroke(emoji == e ? Color.brandPrimary.opacity(0.5) : Color.borderSoft, lineWidth: emoji == e ? 2 : 1)
                             )
-                            .onTapGesture { emoji = e }
+                            .shadow(color: emoji == e ? Color.brandPrimary.opacity(0.2) : Color.clear, radius: 8, x: 0, y: 4)
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    emoji = e
+                                }
+                            }
                     }
                 }
             }
@@ -342,23 +402,47 @@ struct CreateTripView: View {
     }
 
     private var currencyPickerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Mata Uang", systemImage: "dollarsign.circle.fill")
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Mata Uang")
                 .font(AppFont.subheadline())
                 .foregroundColor(.textPrimary.opacity(0.6))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(currencies, id: \.self) { c in
-                        Text(c)
-                            .font(AppFont.subheadline())
-                            .foregroundColor(currency == c ? .white : .textPrimary.opacity(0.6))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(currency == c ? Color.primaryFallback : Color.textPrimary.opacity(0.07))
-                            .clipShape(Capsule())
-                            .onTapGesture { currency = c }
+                        currencyButton(for: c)
                     }
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func currencyButton(for c: String) -> some View {
+        let isSelected = currency == c
+
+        HStack(spacing: 6) {
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+            }
+            Text(c)
+                .font(AppFont.subheadline())
+                .fontWeight(isSelected ? .semibold : .regular)
+        }
+        .foregroundColor(isSelected ? .white : .textPrimary.opacity(0.6))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(isSelected ? AnyShapeStyle(LinearGradient.brandGradient) : AnyShapeStyle(Color.cardFallback))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.full))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.full)
+                .stroke(isSelected ? Color.clear : Color.borderSoft, lineWidth: 1)
+        )
+        .shadow(color: isSelected ? Color.brandPrimary.opacity(0.3) : Color.clear, radius: 8, x: 0, y: 4)
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                currency = c
             }
         }
     }
@@ -433,7 +517,7 @@ struct CreateTripView: View {
             await tripVM.inviteMember(trip: trip, invitee: member, inviter: owner)
         }
 
-        dismiss()
+        showSuccessAlert = true
     }
 }
 

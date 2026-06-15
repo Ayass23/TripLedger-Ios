@@ -32,6 +32,9 @@ struct SplitBillModel: Identifiable, Codable, Equatable {
 
     var ownerUID:        String
     var ownerName:       String
+    var ownerBankAccount: String?  // Optional bank account for payment
+    var paidByUID:       String  // UID of person who paid first (who should be paid back)
+    var paidByName:      String  // Name of person who paid first
     var title:           String
     var totalAmount:     Double
     var currency:        String
@@ -45,7 +48,7 @@ struct SplitBillModel: Identifiable, Codable, Equatable {
     var createdAt:       Timestamp
 
     enum CodingKeys: String, CodingKey {
-        case id, ownerUID, ownerName, title, totalAmount, currency,
+        case id, ownerUID, ownerName, ownerBankAccount, paidByUID, paidByName, title, totalAmount, currency,
              participants, participantUIDs, source, receiptURL, status, category, notes, createdAt
     }
 
@@ -54,6 +57,9 @@ struct SplitBillModel: Identifiable, Codable, Equatable {
         id: String? = nil,
         ownerUID: String,
         ownerName: String,
+        ownerBankAccount: String? = nil,
+        paidByUID: String,
+        paidByName: String,
         title: String,
         totalAmount: Double,
         currency: String,
@@ -69,6 +75,9 @@ struct SplitBillModel: Identifiable, Codable, Equatable {
         self.id = id
         self.ownerUID = ownerUID
         self.ownerName = ownerName
+        self.ownerBankAccount = ownerBankAccount
+        self.paidByUID = paidByUID
+        self.paidByName = paidByName
         self.title = title
         self.totalAmount = totalAmount
         self.currency = currency
@@ -89,6 +98,12 @@ struct SplitBillModel: Identifiable, Codable, Equatable {
         _id = try container.decode(DocumentID<String>.self, forKey: .id)
         ownerUID = try container.decode(String.self, forKey: .ownerUID)
         ownerName = try container.decode(String.self, forKey: .ownerName)
+        ownerBankAccount = try container.decodeIfPresent(String.self, forKey: .ownerBankAccount)
+
+        // Backward compatibility: If paidByUID/paidByName don't exist, use ownerUID/ownerName
+        paidByUID = try container.decodeIfPresent(String.self, forKey: .paidByUID) ?? ownerUID
+        paidByName = try container.decodeIfPresent(String.self, forKey: .paidByName) ?? ownerName
+
         title = try container.decode(String.self, forKey: .title)
         totalAmount = try container.decode(Double.self, forKey: .totalAmount)
         currency = try container.decode(String.self, forKey: .currency)

@@ -167,8 +167,14 @@ struct LoginView: View {
         )
         .onAppear {
             animateGlow = true
+            authVM.clearErrors()
         }
         .sheet(isPresented: $showForgot) { forgotPasswordSheet }
+        .alert("Akun Disuspend", isPresented: $authVM.showSuspendedAlert) {
+            Button("Tutup", role: .cancel) { }
+        } message: {
+            Text("Akun kamu telah disuspend oleh admin.\n\nSilakan hubungi admin untuk informasi lebih lanjut atau ajukan banding.")
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -380,6 +386,9 @@ struct LoginView: View {
         .background(Color(hex: "#2A1D50"))
         .presentationDetents([.height(420)])
         .preferredColorScheme(.dark)
+        .onAppear {
+            authVM.clearErrors()
+        }
         .onDisappear {
             // Reset state saat sheet ditutup
             forgotResult = .idle

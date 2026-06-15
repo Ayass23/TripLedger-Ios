@@ -17,6 +17,7 @@ struct TripLedgerApp: App {
     @StateObject private var notifVM      = NotificationsViewModel()
     @StateObject private var splitBillVM  = SplitBillViewModel()
     @StateObject private var friendsVM    = FriendsViewModel()
+    @StateObject private var adminVM      = AdminViewModel()
     @StateObject private var network      = NetworkMonitor.shared
 
     init() {
@@ -41,7 +42,12 @@ struct TripLedgerApp: App {
                         }
                     }
                 } else if authVM.isAuthenticated {
-                    MainTabView()
+                    // Check user role to show different UI
+                    if authVM.currentUser?.role == .admin {
+                        AdminDashboardView()
+                    } else {
+                        MainTabView()
+                    }
                 } else {
                     WelcomeView()
                 }
@@ -51,6 +57,7 @@ struct TripLedgerApp: App {
             .environmentObject(notifVM)
             .environmentObject(splitBillVM)
             .environmentObject(friendsVM)
+            .environmentObject(adminVM)
             .environmentObject(network)
             .preferredColorScheme(.light)
             .animation(.easeInOut(duration: 0.35), value: authVM.isAuthenticated)

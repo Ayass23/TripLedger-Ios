@@ -88,6 +88,7 @@ struct EditNameView: View {
             .padding(.horizontal, 24)
             .padding(.top, 16)
         }
+        .dismissKeyboardOnTap()
         .navigationTitle("Edit Nama")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -95,8 +96,11 @@ struct EditNameView: View {
                 Button {
                     dismiss()
                 } label: {
-                    Image(systemName: "xmark")
-                        .foregroundColor(.textSecondary)
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.textSecondary)
                 }
             }
         }

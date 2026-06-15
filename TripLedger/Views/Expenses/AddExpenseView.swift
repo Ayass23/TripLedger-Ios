@@ -28,36 +28,57 @@ struct AddExpenseView: View {
     // Step 2: Participants
     struct ParticipantEntry: Identifiable, Equatable {
         let id: String
-        var uid: String?
+        var uid: String
         var name: String
         var isSelected: Bool = true
-        var customAmountStr: String = ""
-        
-        var customAmount: Double { Double(customAmountStr.replacingOccurrences(of: ",", with: "")) ?? 0 }
     }
     @State private var participants: [ParticipantEntry] = []
-    @State private var showAddGuest = false
-    @State private var newGuestName = ""
-    
+
     private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) }
-    
-    // Step 3: Splits
-    @State private var splitType = SplitType.equally
-    
+
+    // Step 3: Item-based Splits
+    struct ItemEntry: Identifiable, Hashable {
+        let id = UUID()
+        var name: String
+        var price: Double
+        var quantity: Int = 1
+        var selectedParticipantIDs: Set<String> = []
+    }
+    @State private var items: [ItemEntry] = []
+    @State private var showEditItem: ItemEntry?
+    @State private var showAddItem = false
+    @State private var editingItemName = ""
+    @State private var editingItemPrice = ""
+    @State private var editingItemQuantity = 1
+
     private var activeParticipants: [ParticipantEntry] { participants.filter { $0.isSelected } }
-    private var perPersonAmount: Double {
-        guard !activeParticipants.isEmpty else { return 0 }
-        return (amount / Double(activeParticipants.count) * 100).rounded() / 100
+
+    // Calculate how much each participant owes based on their item selections
+    private func calculateParticipantAmount(_ participantID: String) -> Double {
+        var itemTotal: Double = 0
+        for item in items {
+            if item.selectedParticipantIDs.contains(participantID) {
+                let shareCount = item.selectedParticipantIDs.count
+                if shareCount > 0 {
+                    itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
+                }
+            }
+        }
+        return itemTotal
     }
-    
-    private var customTotal: Double {
-        activeParticipants.reduce(0) { $0 + $1.customAmount }
+
+    private var calculatedTotal: Double {
+        items.reduce(0) { $0 + ($1.price * Double($1.quantity)) }
     }
-    
+
     private var isStep3Valid: Bool {
-        if splitType == .equally { return true }
-        // For custom, sum must equal total
-        return abs(customTotal - amount) < 0.01
+        !items.isEmpty &&
+        items.allSatisfy { !$0.selectedParticipantIDs.isEmpty } &&
+        abs(calculatedTotal - amount) < 0.01 // Allow small floating point difference
+    }
+
+    private var isTotalMatching: Bool {
+        abs(calculatedTotal - amount) < 0.01
     }
     
     var body: some View {
@@ -105,23 +126,28 @@ struct AddExpenseView: View {
                     ParticipantEntry(id: member.uid, uid: member.uid, name: member.displayName, isSelected: true)
                 }
             }
+            // Init Items with single default item
+            if items.isEmpty && amount > 0 {
+                items = [ItemEntry(name: "Total Pengeluaran", price: amount, quantity: 1)]
+            }
         }
         .onChange(of: amountStr) { newValue in
             let formatted = newValue.formattedAsCurrency()
             if amountStr != formatted { amountStr = formatted }
+
+            // Update default item if only one item exists
+            if items.count == 1 && items.first?.name == "Total Pengeluaran" {
+                items = [ItemEntry(name: "Total Pengeluaran", price: amount, quantity: 1)]
+            }
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(selectedImage: $selectedImage)
         }
-        .alert("Tambah Tamu", isPresented: $showAddGuest) {
-            TextField("Nama Tamu", text: $newGuestName)
-            Button("Batal", role: .cancel) { newGuestName = "" }
-            Button("Tambah") {
-                if !newGuestName.isBlank {
-                    participants.append(ParticipantEntry(id: UUID().uuidString, uid: nil, name: newGuestName.trimmed, isSelected: true))
-                    newGuestName = ""
-                }
-            }
+        .sheet(item: $showEditItem) { item in
+            editItemSheet(item: item)
+        }
+        .sheet(isPresented: $showAddItem) {
+            addItemSheet()
         }
     }
     
@@ -217,39 +243,20 @@ struct AddExpenseView: View {
     // MARK: - Step 2: Pilih Anggota
     private var step2View: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text("Siapa yang ikut patungan?")
-                    .font(AppFont.headline())
-                    .foregroundColor(.textPrimary)
-                Spacer()
-                Button {
-                    showAddGuest = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.badge.plus")
-                        Text("Tamu")
-                    }
-                    .font(AppFont.caption())
-                    .foregroundColor(.brandAccent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.brandAccent.opacity(0.12))
-                    .clipShape(Capsule())
-                }
-            }
-            
+            Text("Siapa yang ikut patungan?")
+                .font(AppFont.headline())
+                .foregroundColor(.textPrimary)
+
             VStack(spacing: 12) {
                 ForEach($participants) { $participant in
                     Button {
                         participant.isSelected.toggle()
                     } label: {
                         HStack(spacing: 12) {
-                            // Checkbox
                             Image(systemName: participant.isSelected ? "checkmark.square.fill" : "square")
                                 .foregroundColor(participant.isSelected ? .brandPrimary : .textPrimary.opacity(0.3))
                                 .font(.system(size: 22))
-                            
-                            // Avatar placeholder
+
                             ZStack {
                                 Circle()
                                     .fill(Color.brandAccent.opacity(0.12))
@@ -258,7 +265,7 @@ struct AddExpenseView: View {
                                     .font(AppFont.caption())
                                     .foregroundColor(.brandAccent)
                             }
-                            
+
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(participant.name)
                                     .font(AppFont.subheadline())
@@ -267,13 +274,9 @@ struct AddExpenseView: View {
                                     Text("Kamu")
                                         .font(AppFont.caption2())
                                         .foregroundColor(.textPrimary.opacity(0.5))
-                                } else if participant.uid == nil {
-                                    Text("Tamu (Non-App)")
-                                        .font(AppFont.caption2())
-                                        .foregroundColor(.warningAmber)
                                 }
                             }
-                            
+
                             Spacer()
                         }
                         .padding(14)
@@ -290,111 +293,192 @@ struct AddExpenseView: View {
         }
     }
     
-    // MARK: - Step 3: Splits
+    // MARK: - Step 3: Siapa Beli Apa
     private var step3View: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            
-            // Total Banner
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Total Pengeluaran")
-                        .font(AppFont.footnote())
-                        .foregroundColor(.textPrimary.opacity(0.6))
-                    Text(amount.toCurrency(symbol: trip.currency))
-                        .font(AppFont.title3())
-                        .foregroundColor(.brandPrimary)
-                }
-                Spacer()
-                Button {
-                    step = 1
-                } label: {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 16))
-                        .foregroundColor(.brandAccent)
-                        .padding(8)
-                        .background(Color.brandAccent.opacity(0.1))
-                        .clipShape(Circle())
-                }
+        VStack(alignment: .leading, spacing: 20) {
+            // Header
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Siapa aja yang beli apa?")
+                    .font(AppFont.headline())
+                    .foregroundColor(.textPrimary)
+                Text("Centang item yang dibeli oleh masing-masing orang")
+                    .font(AppFont.caption())
+                    .foregroundColor(.textPrimary.opacity(0.6))
             }
-            .padding(16)
-            .background(Color.surfaceElevated)
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-            
-            // Split Type Toggle
-            Picker("Cara Bagi", selection: $splitType) {
-                Text("Bagi Rata").tag(SplitType.equally)
-                Text("Tentuin Nominal").tag(SplitType.custom)
-            }
-            .pickerStyle(.segmented)
-            .onAppear {
-                let primaryColor = UIColor(Color.brandPrimary)
-                UISegmentedControl.appearance().selectedSegmentTintColor = primaryColor
-                UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
-                UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: UIColor(Color.textPrimary.opacity(0.6))], for: .normal)
-            }
-            
-            // Splits List
-            VStack(spacing: 12) {
-                ForEach($participants) { $participant in
-                    if participant.isSelected {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.brandAccent.opacity(0.12))
-                                    .frame(width: 36, height: 36)
-                                Text(String(participant.name.prefix(1)).uppercased())
-                                    .font(AppFont.caption())
-                                    .foregroundColor(.brandAccent)
-                            }
-                            
-                            Text(participant.name)
-                                .font(AppFont.subheadline())
-                                .foregroundColor(.textPrimary)
-                            
-                            Spacer()
-                            
-                            if splitType == .equally {
-                                Text(perPersonAmount.toCurrency(symbol: trip.currency))
+
+            // Items List
+            VStack(spacing: 16) {
+                ForEach($items) { $item in
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Item Header
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                // Item name with quantity prefix (always show)
+                                Text("\(item.quantity)x \(item.name)")
                                     .font(AppFont.subheadline())
                                     .foregroundColor(.textPrimary)
-                            } else {
-                                // Custom Input
-                                TextField("0", text: $participant.customAmountStr)
-                                    .keyboardType(.decimalPad)
-                                    .font(AppFont.subheadline())
-                                    .multilineTextAlignment(.trailing)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(Color.textPrimary.opacity(0.04))
-                                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
-                                    .frame(width: 120)
-                                    .onChange(of: participant.customAmountStr) { newValue in
-                                        let formatted = newValue.formattedAsCurrency()
-                                        if participant.customAmountStr != formatted {
-                                            participant.customAmountStr = formatted
-                                        }
+                                HStack(spacing: 4) {
+                                    Text(item.price.toCurrency(symbol: trip.currency))
+                                        .font(AppFont.caption())
+                                        .foregroundColor(.brandPrimary)
+                                    if item.quantity > 1 {
+                                        Text("(@\((item.price * Double(item.quantity)).toCurrency(symbol: trip.currency)))")
+                                            .font(AppFont.caption2())
+                                            .foregroundColor(.textPrimary.opacity(0.5))
                                     }
+                                }
+                            }
+                            Spacer()
+                            // Edit button
+                            Button {
+                                showEditItem = item
+                                editingItemName = item.name
+                                editingItemPrice = String(Int(item.price))
+                                editingItemQuantity = item.quantity
+                            } label: {
+                                Image(systemName: "pencil.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.textPrimary.opacity(0.5))
+                            }
+                            // Count badge
+                            if !item.selectedParticipantIDs.isEmpty {
+                                Text("\(item.selectedParticipantIDs.count)")
+                                    .font(AppFont.caption2())
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.brandPrimary)
+                                    .clipShape(Capsule())
                             }
                         }
-                        .padding(14)
-                        .background(Color.cardFallback)
-                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+
+                        // Participants Chips
+                        FlowLayout(spacing: 8) {
+                            ForEach(activeParticipants) { participant in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        if item.selectedParticipantIDs.contains(participant.id) {
+                                            item.selectedParticipantIDs.remove(participant.id)
+                                        } else {
+                                            item.selectedParticipantIDs.insert(participant.id)
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: item.selectedParticipantIDs.contains(participant.id) ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 14))
+                                        Text(participant.name)
+                                            .font(AppFont.caption())
+                                    }
+                                    .foregroundColor(item.selectedParticipantIDs.contains(participant.id) ? .white : .textPrimary.opacity(0.7))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(item.selectedParticipantIDs.contains(participant.id) ? Color.brandPrimary : Color.textPrimary.opacity(0.08))
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(item.selectedParticipantIDs.isEmpty ? Color.errorRed.opacity(0.3) : Color.borderSoft, lineWidth: 1)
+                    )
+                }
+
+                // Add Item Button
+                Button {
+                    showAddItem = true
+                    editingItemName = ""
+                    editingItemPrice = ""
+                    editingItemQuantity = 1
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 20))
+                        Text("Tambah Item Manual")
+                            .font(AppFont.subheadline())
+                    }
+                    .foregroundColor(.brandAccent)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(Color.brandAccent.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(style: StrokeStyle(lineWidth: 1, dash: [5]))
+                            .foregroundColor(.brandAccent)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Summary
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Ringkasan Pembagian")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary.opacity(0.6))
+
+                VStack(spacing: 8) {
+                    ForEach(activeParticipants) { participant in
+                        let participantAmount = calculateParticipantAmount(participant.id)
+                        if participantAmount > 0 {
+                            HStack {
+                                Text(participant.name)
+                                    .font(AppFont.subheadline())
+                                    .foregroundColor(.textPrimary)
+                                Spacer()
+                                Text(participantAmount.toCurrency(symbol: trip.currency))
+                                    .font(AppFont.subheadline())
+                                    .foregroundColor(.brandPrimary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+
+                    Divider()
+
+                    // Total Tagihan (from step 1)
+                    HStack {
+                        Text("Total Tagihan")
+                            .font(AppFont.subheadline())
+                            .foregroundColor(.textPrimary.opacity(0.7))
+                        Spacer()
+                        Text(amount.toCurrency(symbol: trip.currency))
+                            .font(AppFont.subheadline())
+                            .foregroundColor(.textPrimary.opacity(0.7))
+                    }
+                    .padding(.vertical, 4)
+
+                    // Total Items (calculated)
+                    HStack {
+                        Text("Total Items")
+                            .font(AppFont.headline())
+                            .foregroundColor(.textPrimary)
+                        Spacer()
+                        Text(calculatedTotal.toCurrency(symbol: trip.currency))
+                            .font(AppFont.headline())
+                            .foregroundColor(isTotalMatching ? .brandPrimary : .errorRed)
+                    }
+
+                    // Warning if not matching
+                    if !isTotalMatching {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 12))
+                            Text("Total items harus sama dengan total tagihan")
+                                .font(AppFont.caption2())
+                        }
+                        .foregroundColor(.errorRed)
+                        .padding(.top, 4)
                     }
                 }
-            }
-            
-            if splitType == .custom {
-                let diff = amount - customTotal
-                HStack {
-                    Text(diff == 0 ? "Pas! ✅" : (diff > 0 ? "Kurang: \(diff.toCurrency(symbol: trip.currency))" : "Lebih: \(abs(diff).toCurrency(symbol: trip.currency))"))
-                        .font(AppFont.subheadline())
-                        .foregroundColor(diff == 0 ? .successGreen : .warningAmber)
-                    Spacer()
-                    Text("Total: \(customTotal.toCurrency(symbol: trip.currency))")
-                        .font(AppFont.footnote())
-                        .foregroundColor(.textPrimary.opacity(0.5))
-                }
-                .padding(.top, 8)
+                .padding(12)
+                .background(Color.surfaceElevated)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }
@@ -454,30 +538,59 @@ struct AddExpenseView: View {
     // MARK: - Save Logic
     private func saveExpense() async {
         guard let user = authVM.currentUser else { return }
-        
-        let finalSplits: [ExpenseSplit] = activeParticipants.map { p in
-            let splitAmount = splitType == .equally ? perPersonAmount : p.customAmount
+
+        // Build splits based on item selections
+        let finalSplits: [ExpenseSplit] = activeParticipants.compactMap { p in
+            let splitAmount = calculateParticipantAmount(p.id)
+            guard splitAmount > 0 else { return nil }
+
             return ExpenseSplit(
                 id: p.id,
-                uid: p.uid ?? "guest_\(p.id)", // provide dummy uid for guests
+                uid: p.uid,
                 displayName: p.name,
                 amount: splitAmount,
                 items: []
             )
         }
-        
+
+        // Build notes with item breakdown
+        var finalNotes = notes.isBlank ? "" : notes + "\n\n"
+        finalNotes += "Pembagian Item:\n"
+        for item in items {
+            if !item.selectedParticipantIDs.isEmpty {
+                let participantNames = activeParticipants
+                    .filter { item.selectedParticipantIDs.contains($0.id) }
+                    .map { $0.name }
+                    .joined(separator: ", ")
+                let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
+                let itemTotal = item.price * Double(item.quantity)
+                finalNotes += "• \(qtyPrefix)\(item.name) (\(trip.currency) \(Int(item.price))"
+                if item.quantity > 1 {
+                    finalNotes += " @ \(trip.currency) \(Int(itemTotal))"
+                }
+                finalNotes += "): \(participantNames)\n"
+            }
+        }
+
+        // Get bank account info for current user (who is paying)
+        var paidByBankAccount: String? = nil
+        if let bankInfo = user.bankInfo {
+            paidByBankAccount = "\(bankInfo.bankName) - \(bankInfo.accountNumber) a.n. \(bankInfo.accountName)"
+        }
+
         await expenseVM.addExpense(
             tripID: trip.id ?? "",
             title: title,
-            amount: amount,
+            amount: calculatedTotal,
             currency: trip.currency,
             category: category,
             paidByUID: user.uid,
             paidByName: user.displayName,
-            splitType: splitType,
-            members: trip.members, // kept for backward compatibility if needed
+            paidByBankAccount: paidByBankAccount,
+            splitType: .custom,  // Always use custom for item-based
+            members: trip.members,
             customSplits: finalSplits,
-            notes: notes.isBlank ? nil : notes,
+            notes: finalNotes.trimmingCharacters(in: .whitespacesAndNewlines),
             receiptImage: selectedImage
         )
         isAddingExpense = false
@@ -492,13 +605,97 @@ struct AddExpenseView: View {
             content()
         }
     }
+
+    // MARK: - Edit Item Sheet
+    @ViewBuilder
+    private func editItemSheet(item: ItemEntry) -> some View {
+        NavigationStack {
+            Form {
+                Section("Informasi Item") {
+                    TextField("Nama Item", text: $editingItemName)
+                    TextField("Harga", text: $editingItemPrice)
+                        .keyboardType(.numberPad)
+                    Stepper("Jumlah: \(editingItemQuantity)", value: $editingItemQuantity, in: 1...99)
+                }
+
+                Section {
+                    Button("Hapus Item", role: .destructive) {
+                        items.removeAll { $0.id == item.id }
+                        showEditItem = nil
+                    }
+                }
+            }
+            .navigationTitle("Edit Item")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Batal") { showEditItem = nil }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Simpan") {
+                        if let index = items.firstIndex(where: { $0.id == item.id }) {
+                            items[index].name = editingItemName.trimmed
+                            items[index].price = Double(editingItemPrice.replacingOccurrences(of: ",", with: "")) ?? 0
+                            items[index].quantity = editingItemQuantity
+                        }
+                        showEditItem = nil
+                    }
+                    .disabled(editingItemName.isBlank || editingItemPrice.isBlank)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    // MARK: - Add Item Sheet
+    @ViewBuilder
+    private func addItemSheet() -> some View {
+        NavigationStack {
+            Form {
+                Section("Informasi Item Baru") {
+                    TextField("Nama Item", text: $editingItemName)
+                    TextField("Harga", text: $editingItemPrice)
+                        .keyboardType(.numberPad)
+                    Stepper("Jumlah: \(editingItemQuantity)", value: $editingItemQuantity, in: 1...99)
+                }
+            }
+            .navigationTitle("Tambah Item")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Batal") {
+                        showAddItem = false
+                        editingItemName = ""
+                        editingItemPrice = ""
+                        editingItemQuantity = 1
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Tambah") {
+                        let newItem = ItemEntry(
+                            name: editingItemName.trimmed,
+                            price: Double(editingItemPrice.replacingOccurrences(of: ",", with: "")) ?? 0,
+                            quantity: editingItemQuantity
+                        )
+                        items.append(newItem)
+                        showAddItem = false
+                        editingItemName = ""
+                        editingItemPrice = ""
+                        editingItemQuantity = 1
+                    }
+                    .disabled(editingItemName.isBlank || editingItemPrice.isBlank)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
 }
 
 // MARK: - Progress Header
 struct ProgressHeader: View {
     let step: Int
     let totalSteps: Int
-    
+
     var body: some View {
         HStack(spacing: 8) {
             ForEach(1...totalSteps, id: \.self) { i in

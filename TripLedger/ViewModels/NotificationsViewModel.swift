@@ -23,7 +23,9 @@ final class NotificationsViewModel: ObservableObject {
                .limit(to: 50)
         }) { [weak self] (notifs: [NotificationModel]) in
             self?.notifications = notifs
-            self?.unreadCount   = notifs.filter { !$0.isRead }.count
+            // Count: All unread notifications
+            // Pending friend requests stay unread until action, "Permintaan Diterima" marked as read when opened
+            self?.unreadCount = notifs.filter { !$0.isRead }.count
         }
     }
 

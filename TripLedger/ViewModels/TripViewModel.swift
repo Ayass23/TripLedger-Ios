@@ -5,6 +5,7 @@ import FirebaseFirestore
 @MainActor
 final class TripViewModel: ObservableObject {
 
+    @Published var plannedTrips: [TripModel] = []
     @Published var activeTrips:  [TripModel] = []
     @Published var historyTrips: [TripModel] = []
     @Published var pendingInvites:[TripInvite] = []
@@ -34,6 +35,7 @@ final class TripViewModel: ObservableObject {
                     return
                 }
                 let trips = snapshot?.documents.compactMap { try? $0.data(as: TripModel.self) } ?? []
+                self?.plannedTrips = trips.filter { $0.status == .planned }
                 self?.activeTrips  = trips.filter { $0.status == .active }
                 self?.historyTrips = trips.filter { $0.status == .finished }
             }
@@ -69,10 +71,25 @@ final class TripViewModel: ObservableObject {
             allMemberUIDs.append(user.uid)
         }
 
+        // Determine initial status based on startDate
+        let initialStatus: TripStatus
+        if let startDate = startDate {
+            // Compare dates at start of day (00:00:00)
+            let calendar = Calendar.current
+            let today = calendar.startOfDay(for: Date())
+            let tripStart = calendar.startOfDay(for: startDate)
+
+            // If startDate is today or in the past → active, otherwise → planned
+            initialStatus = tripStart <= today ? .active : .planned
+        } else {
+            // No startDate means start immediately
+            initialStatus = .active
+        }
+
         let trip = TripModel(
             name: name, currency: currency,
             ownerUID: owner.uid, adminUIDs: [owner.uid], memberUIDs: allMemberUIDs,
-            members: allMembers, coverEmoji: emoji, status: .active,
+            members: allMembers, coverEmoji: emoji, status: initialStatus,
             startDate: startDate.map { Timestamp(date: $0) },
             endDate: endDate.map { Timestamp(date: $0) },
             createdAt: now, finishedAt: nil
@@ -183,12 +200,35 @@ final class TripViewModel: ObservableObject {
     }
 
     // MARK: - Finish trip
-    func finishTrip(tripID: String) async {
+    func finishTrip(tripID: String, trip: TripModel, currentUser: UserModel?) async {
         do {
             try await db.update(collection: Collection.trips, documentID: tripID, fields: [
                 "status":     TripStatus.finished.rawValue,
                 "finishedAt": Timestamp(date: Date())
             ])
+
+            // Send notification to all members except the current user
+            guard let currentUID = currentUser?.uid else { return }
+
+            let batch = db.db.batch()
+
+            for member in trip.members where member.uid != currentUID {
+                let notifRef = db.db.collection(Collection.notifications).document()
+                let notification: [String: Any] = [
+                    "recipientUID": member.uid,
+                    "type": "general",
+                    "title": "Trip \(trip.name) Telah Selesai",
+                    "body": "Trip \"\(trip.name)\" telah diselesaikan oleh \(currentUser?.displayName ?? "owner"). Terima kasih sudah berpetualang bersama!",
+                    "isRead": false,
+                    "referenceID": tripID,
+                    "senderUID": currentUID,
+                    "senderName": currentUser?.displayName ?? "",
+                    "createdAt": Timestamp(date: Date())
+                ]
+                batch.setData(notification, forDocument: notifRef)
+            }
+
+            try await batch.commit()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -246,6 +286,39 @@ final class TripViewModel: ObservableObject {
                 "ownerUID":  newOwnerUID,
                 "adminUIDs": FieldValue.arrayUnion([newOwnerUID])
             ])
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Update trip
+    func updateTrip(tripID: String, name: String, currency: String, emoji: String, startDate: Date, endDate: Date) async {
+        do {
+            // Determine status based on startDate
+            let calendar = Calendar.current
+            let today = calendar.startOfDay(for: Date())
+            let tripStart = calendar.startOfDay(for: startDate)
+
+            // Get current trip to check current status
+            let tripDoc = try await db.db.collection(Collection.trips).document(tripID).getDocument()
+            guard let currentTrip = try? tripDoc.data(as: TripModel.self) else { return }
+
+            // Only update status if trip is currently "planned" or "active"
+            // Don't change if already "finished" or "deleted"
+            var fieldsToUpdate: [String: Any] = [
+                "name": name,
+                "currency": currency,
+                "coverEmoji": emoji,
+                "startDate": Timestamp(date: startDate),
+                "endDate": Timestamp(date: endDate)
+            ]
+
+            if currentTrip.status == .planned || currentTrip.status == .active {
+                let newStatus: TripStatus = tripStart <= today ? .active : .planned
+                fieldsToUpdate["status"] = newStatus.rawValue
+            }
+
+            try await db.update(collection: Collection.trips, documentID: tripID, fields: fieldsToUpdate)
         } catch {
             errorMessage = error.localizedDescription
         }

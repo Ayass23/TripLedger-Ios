@@ -28,18 +28,19 @@ final class ExpenseViewModel: ObservableObject {
 
     // MARK: - Add expense (manual)
     func addExpense(
-        tripID:      String,
-        title:       String,
-        amount:      Double,
-        currency:    String,
-        category:    ExpenseCategory,
-        paidByUID:   String,
-        paidByName:  String,
-        splitType:   SplitType,
-        members:     [TripMember],
-        customSplits:[ExpenseSplit] = [],
-        notes:       String? = nil,
-        receiptImage:UIImage? = nil
+        tripID:            String,
+        title:             String,
+        amount:            Double,
+        currency:          String,
+        category:          ExpenseCategory,
+        paidByUID:         String,
+        paidByName:        String,
+        paidByBankAccount: String? = nil,
+        splitType:         SplitType,
+        members:           [TripMember],
+        customSplits:      [ExpenseSplit] = [],
+        notes:             String? = nil,
+        receiptImage:      UIImage? = nil
     ) async {
         isLoading = true
         defer { isLoading = false }
@@ -50,6 +51,7 @@ final class ExpenseViewModel: ObservableObject {
         var expense  = ExpenseModel(
             tripID: tripID, title: title, amount: amount, currency: currency,
             category: category, paidByUID: paidByUID, paidByName: paidByName,
+            paidByBankAccount: paidByBankAccount,
             splitType: splitType, splits: splits, notes: notes,
             receiptURL: nil, createdAt: Timestamp(date: Date()), updatedAt: nil
         )

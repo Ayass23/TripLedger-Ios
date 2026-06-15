@@ -13,18 +13,18 @@ struct NotificationsView: View {
     @State private var selectedInvite: TripInvite?
     @State private var showNotificationDetail = false
 
-    // All items combined (invites + notifications)
-    private var allUnreadItems: [UnreadItem] {
+    // SECTION 1: Undangan (Invites + Pending Friend Requests)
+    private var invitationItems: [UnreadItem] {
         var items: [UnreadItem] = []
-
-        // Add unread notifications
-        for notif in notifVM.notifications.filter({ !$0.isRead }) {
-            items.append(.notification(notif))
-        }
 
         // Add trip invites
         for invite in tripVM.pendingInvites {
             items.append(.invite(invite))
+        }
+
+        // Add ONLY pending friend request notifications (filter by title "Permintaan Pertemanan")
+        for notif in notifVM.notifications.filter({ $0.type == .friendRequest && $0.title == "Permintaan Pertemanan" }) {
+            items.append(.notification(notif))
         }
 
         // Sort by created date
@@ -33,8 +33,12 @@ struct NotificationsView: View {
         }
     }
 
-    private var allReadNotifs: [NotificationModel] {
-        notifVM.notifications.filter { $0.isRead }
+    // SECTION 2: Notifikasi (All other notifications including accepted/rejected friend requests)
+    private var regularNotifications: [NotificationModel] {
+        notifVM.notifications.filter {
+            // Include if NOT friend request, OR if friend request but NOT "Permintaan Pertemanan"
+            $0.type != .friendRequest || $0.title != "Permintaan Pertemanan"
+        }
     }
 
     enum UnreadItem: Identifiable {
@@ -64,25 +68,25 @@ struct NotificationsView: View {
         ZStack {
             Color.baseFallback.ignoresSafeArea()
 
-            if allUnreadItems.isEmpty && allReadNotifs.isEmpty {
+            if invitationItems.isEmpty && regularNotifications.isEmpty {
                 emptyState
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
 
-                        // MARK: - Belum Dibaca
-                        if !allUnreadItems.isEmpty {
-                            sectionHeader(title: "Belum Dibaca", count: allUnreadItems.count, color: .brandAccent)
+                        // MARK: - Undangan
+                        if !invitationItems.isEmpty {
+                            sectionHeader(title: "Undangan", count: invitationItems.count, color: .brandAccent)
 
                             LazyVStack(spacing: 10) {
-                                ForEach(allUnreadItems) { item in
+                                ForEach(invitationItems) { item in
                                     switch item {
                                     case .notification(let notif):
-                                        NotifRow(notif: notif)
+                                        NotifRow(notif: notif, forceShowIndicator: true)
                                             .onTapGesture {
                                                 selectedNotification = notif
                                                 selectedNotificationID = notif.id
-                                                print("📱 [NotifView] Tapped notification - ID: \(notif.id ?? "nil")")
+                                                print("📱 [NotifView] Tapped invitation notification - ID: \(notif.id ?? "nil")")
                                                 showNotificationDetail = true
                                             }
                                     case .invite(let invite):
@@ -98,21 +102,21 @@ struct NotificationsView: View {
                             .padding(.bottom, 20)
                         }
 
-                        // MARK: - Sudah Dibaca
-                        if !allReadNotifs.isEmpty {
-                            if !allUnreadItems.isEmpty {
+                        // MARK: - Notifikasi
+                        if !regularNotifications.isEmpty {
+                            if !invitationItems.isEmpty {
                                 sectionDivider
                             }
 
-                            sectionHeader(title: "Sudah Dibaca", count: allReadNotifs.count, color: .textPrimary.opacity(0.4))
+                            sectionHeader(title: "Notifikasi", count: regularNotifications.count, color: .textPrimary.opacity(0.4))
 
                             LazyVStack(spacing: 10) {
-                                ForEach(allReadNotifs) { notif in
-                                    NotifRow(notif: notif)
+                                ForEach(regularNotifications) { notif in
+                                    NotifRow(notif: notif, forceShowIndicator: false)
                                         .onTapGesture {
                                             selectedNotification = notif
                                             selectedNotificationID = notif.id
-                                            print("📱 [NotifView] Tapped read notification - ID: \(notif.id ?? "nil")")
+                                            print("📱 [NotifView] Tapped regular notification - ID: \(notif.id ?? "nil")")
                                             showNotificationDetail = true
                                         }
                                 }
@@ -263,10 +267,12 @@ struct InviteNotifRow: View {
 // MARK: - Notification Row
 struct NotifRow: View {
     let notif: NotificationModel
+    let forceShowIndicator: Bool // true = selalu tampilkan (untuk undangan), false = based on isRead
 
     private var accentColor: Color {
         switch notif.type {
         case .tripInvite:      return .brandPrimary
+        case .tripEnded:       return .warningAmber
         case .friendRequest:   return .brandAccent
         case .expenseAdded:    return .warningAmber
         case .settlementProof: return .successGreen
@@ -276,10 +282,14 @@ struct NotifRow: View {
         }
     }
 
+    private var shouldShowIndicator: Bool {
+        forceShowIndicator || !notif.isRead
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             // Unread indicator bar
-            if !notif.isRead {
+            if shouldShowIndicator {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color.brandAccent)
                     .frame(width: 3, height: 40)
@@ -298,11 +308,11 @@ struct NotifRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(notif.title)
                     .font(AppFont.subheadline())
-                    .foregroundColor(notif.isRead ? .textPrimary.opacity(0.5) : .textPrimary)
+                    .foregroundColor(forceShowIndicator ? .textPrimary : (notif.isRead ? .textPrimary.opacity(0.5) : .textPrimary))
                     .lineLimit(1)
                 Text(notif.body)
                     .font(AppFont.caption())
-                    .foregroundColor(.textPrimary.opacity(notif.isRead ? 0.3 : 0.5))
+                    .foregroundColor(.textPrimary.opacity(forceShowIndicator ? 0.5 : (notif.isRead ? 0.3 : 0.5)))
                     .lineLimit(2)
             }
 
@@ -313,7 +323,7 @@ struct NotifRow: View {
                     .font(AppFont.caption2())
                     .foregroundColor(.textPrimary.opacity(0.3))
 
-                if !notif.isRead {
+                if shouldShowIndicator {
                     Circle()
                         .fill(Color.brandAccent)
                         .frame(width: 7, height: 7)
@@ -322,9 +332,9 @@ struct NotifRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(notif.isRead ? Color.cardFallback.opacity(0.6) : Color.cardFallback)
+        .background(forceShowIndicator ? Color.cardFallback : (notif.isRead ? Color.cardFallback.opacity(0.6) : Color.cardFallback))
         .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(notif.isRead ? 0.02 : 0.05), radius: 6, y: 2)
+        .shadow(color: .black.opacity(forceShowIndicator ? 0.05 : (notif.isRead ? 0.02 : 0.05)), radius: 6, y: 2)
     }
 }
 
@@ -340,10 +350,13 @@ struct NotificationDetailSheet: View {
     @EnvironmentObject private var notifVM: NotificationsViewModel
 
     @State private var isProcessing = false
+    @State private var showSuccessAlert = false
+    @State private var alertMessage = ""
 
     private var accentColor: Color {
         switch notification.type {
         case .tripInvite:      return .brandPrimary
+        case .tripEnded:       return .warningAmber
         case .friendRequest:   return .brandAccent
         case .expenseAdded:    return .warningAmber
         case .settlementProof: return .successGreen
@@ -403,8 +416,8 @@ struct NotificationDetailSheet: View {
                         .padding(.horizontal, 20)
                     }
 
-                    // Action buttons for friend requests
-                    if notification.type == .friendRequest {
+                    // Action buttons ONLY for PENDING friend requests (not "Permintaan Diterima")
+                    if notification.type == .friendRequest && notification.title == "Permintaan Pertemanan" {
                         actionButtons
                     }
                 }
@@ -426,13 +439,21 @@ struct NotificationDetailSheet: View {
                 print("📋 [NotificationDetail] Reference ID: \(notification.referenceID ?? "nil")")
                 print("📋 [NotificationDetail] Type: \(notification.type.rawValue)")
 
-                // Mark as read when sheet appears
-                Task {
-                    if let id = notificationID ?? notification.id {
-                        await notifVM.markAsRead(notificationID: id)
-                    } else {
-                        print("⚠️ [NotificationDetail] Cannot mark as read - notification ID is nil")
+                // Mark as read when sheet appears - EXCEPT for actionable invitations
+                // ONLY pending friend requests (title = "Permintaan Pertemanan") should stay "unread" until action is taken
+                // "Permintaan Diterima" and other informational notifications should be marked as read
+                let isPendingFriendRequest = notification.type == .friendRequest && notification.title == "Permintaan Pertemanan"
+
+                if !isPendingFriendRequest && notification.type != .tripInvite {
+                    Task {
+                        if let id = notificationID ?? notification.id {
+                            await notifVM.markAsRead(notificationID: id)
+                        } else {
+                            print("⚠️ [NotificationDetail] Cannot mark as read - notification ID is nil")
+                        }
                     }
+                } else {
+                    print("📋 [NotificationDetail] Skipping auto mark-as-read for actionable invitation: \(notification.title)")
                 }
             }
         }
@@ -465,8 +486,14 @@ struct NotificationDetailSheet: View {
                     await notifVM.deleteNotification(notificationID: finalNotifID)
 
                     isProcessing = false
-                    print("✅ Request rejected, dismissing sheet")
-                    onDismiss()
+
+                    // Show success alert
+                    if friendsVM.errorMessage == nil {
+                        alertMessage = "Permintaan pertemanan telah ditolak."
+                        showSuccessAlert = true
+                    } else {
+                        onDismiss()
+                    }
                 }
             } label: {
                 VStack(spacing: 8) {
@@ -525,13 +552,17 @@ struct NotificationDetailSheet: View {
 
                         // Delete notification from UI immediately
                         await notifVM.deleteNotification(notificationID: finalNotifID)
+
+                        // Show success alert
+                        let senderName = notification.senderName ?? "pengguna ini"
+                        alertMessage = "Sekarang kamu dan \(senderName) sudah berteman! 🎉"
+                        showSuccessAlert = true
                     } else {
                         print("❌ Error accepting request: \(friendsVM.errorMessage ?? "unknown")")
+                        onDismiss()
                     }
 
                     isProcessing = false
-                    print("✅ Done, dismissing sheet")
-                    onDismiss()
                 }
             } label: {
                 VStack(spacing: 8) {
@@ -559,6 +590,13 @@ struct NotificationDetailSheet: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
         .background(Color.baseFallback)
+        .alert("Permintaan Pertemanan", isPresented: $showSuccessAlert) {
+            Button("OK") {
+                onDismiss()
+            }
+        } message: {
+            Text(alertMessage)
+        }
     }
 }
 
