@@ -1,22 +1,21 @@
 import Foundation
 import FirebaseFirestore
 
+// MARK: - Transaction (computed debt for settlement)
+struct Transaction: Identifiable {
+    let id: String = UUID().uuidString
+    let fromUID: String
+    let fromName: String
+    let toUID: String
+    let toName: String
+    let amount: Double
+}
+
 // MARK: - Settlement Status
 enum SettlementStatus: String, Codable {
     case pending  = "pending"
     case verified = "verified"
     case rejected = "rejected"
-}
-
-// MARK: - Debt Record (computed, not stored — stored as settlement records)
-struct DebtRecord: Identifiable {
-    var id:        String { "\(fromUID)_\(toUID)" }
-    var fromUID:   String
-    var fromName:  String
-    var toUID:     String
-    var toName:    String
-    var amount:    Double
-    var currency:  String
 }
 
 // MARK: - Settlement Model (stored in Firestore)

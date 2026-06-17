@@ -221,7 +221,7 @@ struct SettlementView: View {
                 }
             }
         }
-        .sheet(isPresented: $showPicker) { ImagePickerView(image: $proofImage) }
+        .sheet(isPresented: $showPicker) { ImagePicker(selectedImage: $proofImage) }
         .preferredColorScheme(.dark)
     }
 
