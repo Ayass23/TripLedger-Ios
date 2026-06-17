@@ -26,7 +26,28 @@ struct FriendDetailView: View {
             let hasCurrentUser = trip.memberUIDs.contains(currentUID)
             let hasFriend = trip.memberUIDs.contains(friend.uid)
             return hasCurrentUser && hasFriend
+        }.sorted { $0.startDate > $1.startDate } // Sort by newest first
+    }
+
+    // Group trips by month
+    private var tripsByMonth: [(monthYear: String, trips: [TripModel])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: sharedTrips) { trip -> String in
+            let components = calendar.dateComponents([.year, .month], from: trip.startDate)
+            let date = calendar.date(from: components) ?? trip.startDate
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "id_ID")
+            formatter.dateFormat = "MMMM yyyy"
+            return formatter.string(from: date)
         }
+
+        // Sort by date descending
+        return grouped.map { ($0.key, $0.value.sorted { $0.startDate > $1.startDate }) }
+            .sorted { month1, month2 in
+                guard let date1 = month1.trips.first?.startDate,
+                      let date2 = month2.trips.first?.startDate else { return false }
+                return date1 > date2
+            }
     }
 
     var body: some View {
@@ -97,10 +118,27 @@ struct FriendDetailView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 40)
                             } else {
-                                // Trip List
-                                VStack(spacing: 8) {
-                                    ForEach(sharedTrips) { trip in
-                                        TripRowCard(trip: trip)
+                                // Trip List - Grouped by Month
+                                VStack(spacing: 20) {
+                                    ForEach(tripsByMonth, id: \.monthYear) { monthGroup in
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            // Month Header
+                                            Text(monthGroup.monthYear)
+                                                .font(AppFont.subheadline())
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.textSecondary)
+                                                .padding(.horizontal, 4)
+
+                                            // Trips in this month
+                                            VStack(spacing: 8) {
+                                                ForEach(monthGroup.trips) { trip in
+                                                    NavigationLink(destination: TripDetailView(trip: trip)) {
+                                                        TripRowCard(trip: trip)
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -197,6 +235,31 @@ struct FriendDetailView: View {
 struct TripRowCard: View {
     let trip: TripModel
 
+    private var dateRangeText: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "id_ID")
+        formatter.dateFormat = "d MMM"
+
+        let startDate = formatter.string(from: trip.startDate)
+        let endDate = formatter.string(from: trip.endDate)
+
+        // Check if same month
+        let calendar = Calendar.current
+        let startMonth = calendar.component(.month, from: trip.startDate)
+        let endMonth = calendar.component(.month, from: trip.endDate)
+
+        if startMonth == endMonth {
+            // Same month: "5-10 Feb"
+            let dayFormatter = DateFormatter()
+            dayFormatter.dateFormat = "d"
+            let startDay = dayFormatter.string(from: trip.startDate)
+            return "\(startDay)-\(endDate)"
+        } else {
+            // Different month: "28 Jan - 2 Feb"
+            return "\(startDate) - \(endDate)"
+        }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Emoji
@@ -207,12 +270,24 @@ struct TripRowCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
             // Info
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(trip.name)
                     .font(AppFont.subheadline())
                     .fontWeight(.semibold)
                     .foregroundColor(.textPrimary)
 
+                // Date range
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 10))
+                        .foregroundColor(.textSecondary)
+
+                    Text(dateRangeText)
+                        .font(AppFont.caption2())
+                        .foregroundColor(.textSecondary)
+                }
+
+                // Members & Status
                 HStack(spacing: 4) {
                     Image(systemName: "person.2")
                         .font(.system(size: 10))
