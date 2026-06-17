@@ -1,4 +1,5 @@
 import SwiftUI
+import Kingfisher
 
 struct ProfileView: View {
     @EnvironmentObject private var authVM:   AuthViewModel
@@ -12,6 +13,7 @@ struct ProfileView: View {
     @State private var showImageCropper = false
     @State private var selectedImage: UIImage?
     @State private var croppedImage: UIImage?
+    @State private var isUploadingAvatar = false
 
     var body: some View {
         ZStack {
@@ -34,6 +36,27 @@ struct ProfileView: View {
                     .padding(.top, 24)
                     .padding(.bottom, 24)
                 }
+            }
+
+            // Loading overlay during avatar upload
+            if isUploadingAvatar {
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                        .tint(.white)
+
+                    Text("Mengunggah foto...")
+                        .font(AppFont.subheadline())
+                        .foregroundColor(.white)
+                }
+                .padding(30)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.black.opacity(0.7))
+                )
             }
         }
         .fullScreenCover(isPresented: $showEditName) {
@@ -83,18 +106,25 @@ struct ProfileView: View {
             if let image = selectedImage {
                 CircleImageCropperView(image: image) { croppedImg in
                     croppedImage = croppedImg
+                    isUploadingAvatar = true
                     Task {
                         if let uid = authVM.currentUser?.uid {
+                            // Get old avatar URL before upload
+                            let oldAvatarURL = authVM.currentUser?.avatarURL
+
                             await profileVM.uploadAvatar(croppedImg, uid: uid)
 
                             // Refresh current user data
                             await authVM.refreshUser()
 
-                            // Clear URL cache untuk force reload gambar baru
-                            URLCache.shared.removeAllCachedResponses()
+                            // Clear Kingfisher cache for old avatar URL only
+                            if let oldURL = oldAvatarURL, let url = URL(string: oldURL) {
+                                KingfisherManager.shared.cache.removeImage(forKey: url.absoluteString)
+                            }
 
                             print("🔄 [ProfileView] User refreshed - New avatar URL: \(authVM.currentUser?.avatarURL ?? "nil")")
                         }
+                        isUploadingAvatar = false
                     }
                 }
             } else {

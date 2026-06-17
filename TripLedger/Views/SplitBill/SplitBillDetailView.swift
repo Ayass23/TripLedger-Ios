@@ -1,4 +1,5 @@
 import SwiftUI
+import Kingfisher
 
 struct SplitBillDetailView: View {
     @Environment(\.dismiss) var dismiss
@@ -69,26 +70,8 @@ struct SplitBillDetailView: View {
                                     showFullScreenReceipt = true
                                 } label: {
                                     ZStack(alignment: .bottom) {
-                                        AsyncImage(url: url) { phase in
-                                            if let image = phase.image {
-                                                image
-                                                    .resizable()
-                                                    .scaledToFill()
-                                                    .frame(height: 180)
-                                                    .frame(maxWidth: .infinity)
-                                                    .clipped()
-                                            } else if phase.error != nil {
-                                                HStack {
-                                                    Image(systemName: "exclamationmark.triangle")
-                                                        .foregroundColor(.errorRed)
-                                                    Text("Gagal memuat foto struk")
-                                                        .font(AppFont.caption())
-                                                        .foregroundColor(.textPrimary.opacity(0.5))
-                                                }
-                                                .frame(height: 180)
-                                                .frame(maxWidth: .infinity)
-                                                .background(Color.textPrimary.opacity(0.05))
-                                            } else {
+                                        KFImage(url)
+                                            .placeholder {
                                                 ZStack {
                                                     Color.textPrimary.opacity(0.05)
                                                         .frame(height: 180)
@@ -96,7 +79,12 @@ struct SplitBillDetailView: View {
                                                         .tint(.brandPrimary)
                                                 }
                                             }
-                                        }
+                                            .onFailure { _ in }
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height: 180)
+                                            .frame(maxWidth: .infinity)
+                                            .clipped()
 
                                         // Overlay text - Centered
                                         HStack(spacing: 6) {
@@ -703,55 +691,44 @@ struct FullScreenReceiptView: View {
                 }
 
                 // Image with Zoom
-                AsyncImage(url: imageURL) { phase in
-                    if let image = phase.image {
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .scaleEffect(scale)
-                            .gesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        scale = lastScale * value
-                                    }
-                                    .onEnded { _ in
-                                        lastScale = scale
-                                        // Limit scale
-                                        if scale < 1.0 {
-                                            withAnimation {
-                                                scale = 1.0
-                                                lastScale = 1.0
-                                            }
-                                        } else if scale > 5.0 {
-                                            withAnimation {
-                                                scale = 5.0
-                                                lastScale = 5.0
-                                            }
-                                        }
-                                    }
-                            )
-                            .onTapGesture(count: 2) {
-                                // Double tap to reset zoom
-                                withAnimation {
-                                    scale = 1.0
-                                    lastScale = 1.0
-                                }
-                            }
-                    } else if phase.error != nil {
-                        VStack(spacing: 16) {
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 48))
-                                .foregroundColor(.white.opacity(0.7))
-                            Text("Gagal memuat foto struk")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-                    } else {
+                KFImage(imageURL)
+                    .placeholder {
                         ProgressView()
                             .tint(.white)
                             .scaleEffect(1.5)
                     }
-                }
+                    .onFailure { _ in }
+                    .resizable()
+                    .scaledToFit()
+                    .scaleEffect(scale)
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                scale = lastScale * value
+                            }
+                            .onEnded { _ in
+                                lastScale = scale
+                                // Limit scale
+                                if scale < 1.0 {
+                                    withAnimation {
+                                        scale = 1.0
+                                        lastScale = 1.0
+                                    }
+                                } else if scale > 5.0 {
+                                    withAnimation {
+                                        scale = 5.0
+                                        lastScale = 5.0
+                                    }
+                                }
+                            }
+                    )
+                    .onTapGesture(count: 2) {
+                        // Double tap to reset zoom
+                        withAnimation {
+                            scale = 1.0
+                            lastScale = 1.0
+                        }
+                    }
 
                 // Hint Text
                 if scale == 1.0 {

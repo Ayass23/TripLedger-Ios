@@ -1,4 +1,5 @@
 import SwiftUI
+import Kingfisher
 
 struct ExpenseDetailView: View {
     @Environment(\.dismiss) var dismiss
@@ -79,26 +80,8 @@ struct ExpenseDetailView: View {
                                 showFullScreenReceipt = true
                             } label: {
                                 ZStack(alignment: .bottom) {
-                                    AsyncImage(url: url) { phase in
-                                        if let image = phase.image {
-                                            image
-                                                .resizable()
-                                                .scaledToFill()
-                                                .frame(height: 180)
-                                                .frame(maxWidth: .infinity)
-                                                .clipped()
-                                        } else if phase.error != nil {
-                                            HStack {
-                                                Image(systemName: "exclamationmark.triangle")
-                                                    .foregroundColor(.errorRed)
-                                                Text("Gagal memuat foto struk")
-                                                    .font(AppFont.caption())
-                                                    .foregroundColor(.textPrimary.opacity(0.5))
-                                            }
-                                            .frame(height: 180)
-                                            .frame(maxWidth: .infinity)
-                                            .background(Color.textPrimary.opacity(0.05))
-                                        } else {
+                                    KFImage(url)
+                                        .placeholder {
                                             ZStack {
                                                 Color.textPrimary.opacity(0.05)
                                                     .frame(height: 180)
@@ -106,7 +89,12 @@ struct ExpenseDetailView: View {
                                                     .tint(.brandPrimary)
                                             }
                                         }
-                                    }
+                                        .onFailure { _ in }
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(height: 180)
+                                        .frame(maxWidth: .infinity)
+                                        .clipped()
 
                                     // Overlay text - Centered
                                     HStack(spacing: 6) {

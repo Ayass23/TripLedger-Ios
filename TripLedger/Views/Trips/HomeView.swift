@@ -1,6 +1,7 @@
 import SwiftUI
 import FirebaseFirestore
 import FirebaseCore
+import Kingfisher
 
 struct HomeView: View {
     @EnvironmentObject private var authVM:   AuthViewModel
@@ -462,7 +463,7 @@ struct TripCard: View {
     }
 }
 
-// MARK: - Avatar View (reusable)
+// MARK: - Avatar View (reusable) - Using Kingfisher for disk caching
 struct AvatarView: View {
     let url:      String?
     let initials: String
@@ -471,27 +472,20 @@ struct AvatarView: View {
     var body: some View {
         Group {
             if let url, let imgURL = URL(string: url) {
-                AsyncImage(url: imgURL) { phase in
-                    switch phase {
-                    case .empty:
+                KFImage(imgURL)
+                    .placeholder {
                         initialsView
                             .overlay(
                                 ProgressView()
                                     .tint(.white)
                                     .scaleEffect(0.7)
                             )
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: size, height: size)
-                            .clipped()
-                    case .failure:
-                        initialsView
-                    @unknown default:
-                        initialsView
                     }
-                }
+                    .onFailure { _ in }
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipped()
             } else {
                 initialsView
             }
