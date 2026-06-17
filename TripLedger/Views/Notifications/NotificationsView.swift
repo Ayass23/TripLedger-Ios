@@ -431,6 +431,23 @@ struct NotificationDetailSheet: View {
                     }
                     .foregroundColor(.textSecondary)
                 }
+
+                // Show delete button only for read notifications (except pending friend requests)
+                if notification.isRead && !(notification.type == .friendRequest && notification.title == "Permintaan Pertemanan") {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            Task {
+                                if let id = notificationID ?? notification.id {
+                                    await notifVM.deleteNotification(notificationID: id)
+                                    onDismiss()
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundColor(.errorRed)
+                        }
+                    }
+                }
             }
             .onAppear {
                 // Debug: Print notification info

@@ -40,7 +40,7 @@ struct HomeView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "plus")
                             .font(.system(size: 18, weight: .bold))
-                        Text("New Trip")
+                        Text("Trip Baru")
                             .font(AppFont.headline())
                     }
                     .foregroundColor(.white)
@@ -185,7 +185,7 @@ struct HomeView: View {
     // MARK: - Pending Bills Section
     private var pendingBillsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-                Text("Pending Bills")
+                Text("Daftar Hutang")
                     .font(AppFont.title2())
                     .foregroundColor(.textPrimary)
                 
@@ -244,7 +244,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             // Section header with "See All"
             HStack {
-                Text("My Trips")
+                Text("Daftar Trip")
                     .font(AppFont.title2())
                     .foregroundColor(.textPrimary)
 

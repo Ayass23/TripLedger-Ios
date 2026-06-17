@@ -32,7 +32,7 @@ struct SplitBillView: View {
 
                         // MARK: Split Bills List
                         if !splitBillVM.splitBills.isEmpty {
-                            sectionHeader("Split bill List", count: splitBillVM.splitBills.count)
+                            sectionHeader("Daftar Split Bill", count: splitBillVM.splitBills.count)
                             LazyVStack(spacing: 12) {
                                 ForEach(splitBillVM.splitBills) { bill in
                                     NavigationLink(destination: SplitBillDetailView(bill: bill)
