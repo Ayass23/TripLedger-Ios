@@ -26,15 +26,23 @@ struct FriendDetailView: View {
             let hasCurrentUser = trip.memberUIDs.contains(currentUID)
             let hasFriend = trip.memberUIDs.contains(friend.uid)
             return hasCurrentUser && hasFriend
-        }.sorted { $0.startDate > $1.startDate } // Sort by newest first
+        }.sorted { trip1, trip2 in
+            // Sort by newest first, handle optional Timestamp
+            guard let date1 = trip1.startDate?.dateValue(),
+                  let date2 = trip2.startDate?.dateValue() else {
+                return false
+            }
+            return date1 > date2
+        }
     }
 
     // Group trips by month
     private var tripsByMonth: [(monthYear: String, trips: [TripModel])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: sharedTrips) { trip -> String in
-            let components = calendar.dateComponents([.year, .month], from: trip.startDate)
-            let date = calendar.date(from: components) ?? trip.startDate
+            guard let startDate = trip.startDate?.dateValue() else { return "Unknown" }
+            let components = calendar.dateComponents([.year, .month], from: startDate)
+            let date = calendar.date(from: components) ?? startDate
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "id_ID")
             formatter.dateFormat = "MMMM yyyy"
@@ -42,12 +50,16 @@ struct FriendDetailView: View {
         }
 
         // Sort by date descending
-        return grouped.map { ($0.key, $0.value.sorted { $0.startDate > $1.startDate }) }
-            .sorted { month1, month2 in
-                guard let date1 = month1.trips.first?.startDate,
-                      let date2 = month2.trips.first?.startDate else { return false }
-                return date1 > date2
-            }
+        return grouped.map { ($0.key, $0.value.sorted { trip1, trip2 in
+            guard let date1 = trip1.startDate?.dateValue(),
+                  let date2 = trip2.startDate?.dateValue() else { return false }
+            return date1 > date2
+        }) }
+        .sorted { month1, month2 in
+            guard let date1 = month1.trips.first?.startDate?.dateValue(),
+                  let date2 = month2.trips.first?.startDate?.dateValue() else { return false }
+            return date1 > date2
+        }
     }
 
     var body: some View {
@@ -236,27 +248,35 @@ struct TripRowCard: View {
     let trip: TripModel
 
     private var dateRangeText: String {
+        guard let startTimestamp = trip.startDate,
+              let endTimestamp = trip.endDate else {
+            return "Tanggal belum ditentukan"
+        }
+
+        let startDate = startTimestamp.dateValue()
+        let endDate = endTimestamp.dateValue()
+
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "id_ID")
         formatter.dateFormat = "d MMM"
 
-        let startDate = formatter.string(from: trip.startDate)
-        let endDate = formatter.string(from: trip.endDate)
+        let startDateStr = formatter.string(from: startDate)
+        let endDateStr = formatter.string(from: endDate)
 
         // Check if same month
         let calendar = Calendar.current
-        let startMonth = calendar.component(.month, from: trip.startDate)
-        let endMonth = calendar.component(.month, from: trip.endDate)
+        let startMonth = calendar.component(.month, from: startDate)
+        let endMonth = calendar.component(.month, from: endDate)
 
         if startMonth == endMonth {
             // Same month: "5-10 Feb"
             let dayFormatter = DateFormatter()
             dayFormatter.dateFormat = "d"
-            let startDay = dayFormatter.string(from: trip.startDate)
-            return "\(startDay)-\(endDate)"
+            let startDay = dayFormatter.string(from: startDate)
+            return "\(startDay)-\(endDateStr)"
         } else {
             // Different month: "28 Jan - 2 Feb"
-            return "\(startDate) - \(endDate)"
+            return "\(startDateStr) - \(endDateStr)"
         }
     }
 
