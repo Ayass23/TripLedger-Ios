@@ -342,8 +342,6 @@ struct CreateTripView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.left")
                             .font(.system(size: 12, weight: .semibold))
-                        Text("Kembali")
-                            .font(AppFont.subheadline())
                     }
                     .foregroundColor(.textPrimary.opacity(0.5))
                 }

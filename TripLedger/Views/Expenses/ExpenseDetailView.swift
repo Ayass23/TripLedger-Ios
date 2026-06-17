@@ -13,6 +13,7 @@ struct ExpenseDetailView: View {
     @State private var showFullScreenReceipt = false
     @State private var showPDFPreview = false
     @State private var pdfURL: URL?
+    @State private var isGeneratingPDF = false
 
     private var isOwner: Bool {
         expense.paidByUID == authVM.currentUser?.uid
@@ -210,18 +211,27 @@ struct ExpenseDetailView: View {
                         generateAndSharePDF()
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 20))
-                            Text("Bagikan Tagihan")
-                                .font(AppFont.subheadline())
-                                .fontWeight(.medium)
+                            if isGeneratingPDF {
+                                ProgressView()
+                                    .tint(.white)
+                                Text("Membuat PDF...")
+                                    .font(AppFont.subheadline())
+                                    .fontWeight(.medium)
+                            } else {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 20))
+                                Text("Bagikan Tagihan")
+                                    .font(AppFont.subheadline())
+                                    .fontWeight(.medium)
+                            }
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(Color.brandPrimary)
+                        .background(isGeneratingPDF ? Color.brandPrimary.opacity(0.7) : Color.brandPrimary)
                         .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                     }
+                    .disabled(isGeneratingPDF)
                     .padding(.horizontal, 20)
                     
                     Spacer().frame(height: 40)
@@ -279,17 +289,50 @@ struct ExpenseDetailView: View {
     }
 
     private func generateAndSharePDF() {
-        // Generate PDF using PDFGenerator
-        if let url = PDFGenerator.generateExpensePDF(
-            expense: expense,
-            currency: currency,
-            paidAmount: paidAmount,
-            isFullySettled: isFullySettled
-        ) {
-            pdfURL = url
-            showPDFPreview = true
-        } else {
-            print("❌ Failed to generate PDF")
+        isGeneratingPDF = true
+
+        Task {
+            // Download receipt image if exists
+            var receiptImage: UIImage? = nil
+            if let receiptURL = expense.receiptURL, !receiptURL.isEmpty {
+                receiptImage = await downloadImage(from: receiptURL)
+            }
+
+            // Generate PDF using PDFGenerator with pre-downloaded image
+            if let url = PDFGenerator.generateExpensePDF(
+                expense: expense,
+                currency: currency,
+                paidAmount: paidAmount,
+                isFullySettled: isFullySettled,
+                receiptImage: receiptImage
+            ) {
+                await MainActor.run {
+                    pdfURL = url
+                    showPDFPreview = true
+                    isGeneratingPDF = false
+                }
+            } else {
+                await MainActor.run {
+                    print("❌ Failed to generate PDF")
+                    isGeneratingPDF = false
+                }
+            }
+        }
+    }
+
+    // MARK: - Download Image Async
+    private func downloadImage(from urlString: String) async -> UIImage? {
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid URL: \(urlString)")
+            return nil
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            return UIImage(data: data)
+        } catch {
+            print("❌ Failed to download image: \(error.localizedDescription)")
+            return nil
         }
     }
 }

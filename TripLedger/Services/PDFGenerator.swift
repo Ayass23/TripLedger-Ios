@@ -20,7 +20,8 @@ class PDFGenerator {
         expense: ExpenseModel,
         currency: String,
         paidAmount: Double,
-        isFullySettled: Bool
+        isFullySettled: Bool,
+        receiptImage: UIImage? = nil
     ) -> URL? {
 
         let pdfMetaData = [
@@ -84,9 +85,9 @@ class PDFGenerator {
             drawFooter(in: pageRect)
 
             // MARK: - Receipt Image (New Page)
-            if let receiptURL = expense.receiptURL, !receiptURL.isEmpty {
+            if let image = receiptImage {
                 context.beginPage()
-                drawReceiptPage(receiptURL: receiptURL, in: pageRect, title: "Foto Struk/Nota")
+                drawReceiptPageWithImage(image: image, in: pageRect, title: "Foto Struk/Nota")
             }
         }
 
@@ -104,7 +105,8 @@ class PDFGenerator {
 
     // MARK: - Generate Split Bill PDF
     static func generateSplitBillPDF(
-        bill: SplitBillModel
+        bill: SplitBillModel,
+        receiptImage: UIImage? = nil
     ) -> URL? {
 
         let pdfMetaData = [
@@ -168,9 +170,9 @@ class PDFGenerator {
             drawFooter(in: pageRect)
 
             // MARK: - Receipt Image (New Page)
-            if let receiptURL = bill.receiptURL, !receiptURL.isEmpty {
+            if let image = receiptImage {
                 context.beginPage()
-                drawReceiptPage(receiptURL: receiptURL, in: pageRect, title: "Foto Struk/Nota")
+                drawReceiptPageWithImage(image: image, in: pageRect, title: "Foto Struk/Nota")
             }
         }
 
@@ -632,7 +634,70 @@ class PDFGenerator {
         dateText.draw(at: CGPoint(x: dateX, y: footerY + 12), withAttributes: footerAttrs)
     }
 
-    // MARK: - Draw Receipt Page
+    // MARK: - Draw Receipt Page with Pre-downloaded Image
+    private static func drawReceiptPageWithImage(image: UIImage, in pageRect: CGRect, title: String) {
+        var currentY: CGFloat = 40
+
+        // Page title
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.boldSystemFont(ofSize: 20),
+            .foregroundColor: primaryColor
+        ]
+        let titleSize = title.size(withAttributes: titleAttrs)
+        let titleX = (pageRect.width - titleSize.width) / 2
+        title.draw(at: CGPoint(x: titleX, y: currentY), withAttributes: titleAttrs)
+
+        currentY += titleSize.height + 30
+
+        // Calculate image size to fit page with padding
+        let maxWidth = pageRect.width - 80
+        let maxHeight = pageRect.height - currentY - 60
+
+        let imageSize = image.size
+        let aspectRatio = imageSize.width / imageSize.height
+
+        var drawWidth: CGFloat
+        var drawHeight: CGFloat
+
+        if aspectRatio > 1 {
+            drawWidth = min(maxWidth, imageSize.width)
+            drawHeight = drawWidth / aspectRatio
+        } else {
+            drawHeight = min(maxHeight, imageSize.height)
+            drawWidth = drawHeight * aspectRatio
+        }
+
+        if drawWidth > maxWidth {
+            drawWidth = maxWidth
+            drawHeight = drawWidth / aspectRatio
+        }
+        if drawHeight > maxHeight {
+            drawHeight = maxHeight
+            drawWidth = drawHeight * aspectRatio
+        }
+
+        // Center the image
+        let imageX = (pageRect.width - drawWidth) / 2
+        let imageRect = CGRect(x: imageX, y: currentY, width: drawWidth, height: drawHeight)
+
+        // Draw border/frame
+        let borderPath = UIBezierPath(roundedRect: imageRect, cornerRadius: 8)
+        surfaceElevated.setFill()
+        borderPath.fill()
+
+        // Draw image
+        image.draw(in: imageRect)
+
+        // Draw border stroke
+        primaryColor.withAlphaComponent(0.3).setStroke()
+        borderPath.lineWidth = 2
+        borderPath.stroke()
+
+        // Footer
+        drawFooter(in: pageRect)
+    }
+
+    // MARK: - Draw Receipt Page (Legacy - for backward compatibility)
     private static func drawReceiptPage(receiptURL: String, in pageRect: CGRect, title: String) {
         var currentY: CGFloat = 40
 

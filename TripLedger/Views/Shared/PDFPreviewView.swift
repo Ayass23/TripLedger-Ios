@@ -26,7 +26,6 @@ struct PDFPreviewView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 14, weight: .semibold))
-                            Text("Kembali")
                         }
                         .foregroundColor(.brandPrimary)
                     }

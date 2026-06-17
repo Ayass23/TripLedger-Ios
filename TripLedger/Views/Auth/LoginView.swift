@@ -26,8 +26,6 @@ struct LoginView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text("Kembali")
-                                .font(AppFont.subheadline())
                         }
                         .foregroundColor(.white.opacity(0.8))
                         .padding(.vertical, 10)
