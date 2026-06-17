@@ -118,8 +118,8 @@ struct ProfileView: View {
                             await authVM.refreshUser()
 
                             // Clear Kingfisher cache for old avatar URL only
-                            if let oldURL = oldAvatarURL, let url = URL(string: oldURL) {
-                                try? await KingfisherManager.shared.cache.removeImage(forKey: url.absoluteString)
+                            if let oldURL = oldAvatarURL {
+                                ImageCache.default.removeImage(forKey: oldURL)
                             }
 
                             print("🔄 [ProfileView] User refreshed - New avatar URL: \(authVM.currentUser?.avatarURL ?? "nil")")
