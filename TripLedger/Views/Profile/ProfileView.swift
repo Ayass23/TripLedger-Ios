@@ -109,19 +109,8 @@ struct ProfileView: View {
                     isUploadingAvatar = true
                     Task {
                         if let uid = authVM.currentUser?.uid {
-                            // Get old avatar URL before upload
-                            let oldAvatarURL = authVM.currentUser?.avatarURL
-
                             await profileVM.uploadAvatar(croppedImg, uid: uid)
-
-                            // Refresh current user data
                             await authVM.refreshUser()
-
-                            // Clear Kingfisher cache for old avatar URL only
-                            if let oldURL = oldAvatarURL {
-                                ImageCache.default.removeImage(forKey: oldURL)
-                            }
-
                             print("🔄 [ProfileView] User refreshed - New avatar URL: \(authVM.currentUser?.avatarURL ?? "nil")")
                         }
                         isUploadingAvatar = false
