@@ -17,21 +17,50 @@ final class DebtViewModel: ObservableObject {
 
     deinit { listener?.remove() }
 
-    // MARK: - Compute debts from expenses
+    // MARK: - Compute debts from expenses (Direct debt without simplification)
     func computeDebts(expenses: [ExpenseModel], members: [TripMember], currency: String) {
-        var payments:    [(uid: String, amount: Double)] = []
-        var obligations: [(uid: String, amount: Double)] = []
+        let nameMap = Dictionary(uniqueKeysWithValues: members.map { ($0.uid, $0.displayName) })
+        var directDebts: [String: Double] = [:] // key: "fromUID_toUID", value: amount
 
+        // For each expense, calculate direct debts
         for expense in expenses {
-            payments.append((uid: expense.paidByUID, amount: expense.amount))
+            let payerUID = expense.paidByUID
+            let payerName = nameMap[payerUID] ?? payerUID
+
+            // Each person who owes money (except the payer) creates a direct debt
             for split in expense.splits {
-                obligations.append((uid: split.uid, amount: split.amount))
+                // Skip if this person is the payer
+                if split.uid == payerUID { continue }
+
+                let debtKey = "\(split.uid)_\(payerUID)"
+                directDebts[debtKey, default: 0] += split.amount
             }
         }
 
-        let nameMap = Dictionary(uniqueKeysWithValues: members.map { ($0.uid, $0.displayName) })
-        let balances = DebtSimplifier.computeBalances(payments: payments, obligations: obligations, memberNames: nameMap)
-        transactions = DebtSimplifier.simplify(balances: balances)
+        // Convert to Transaction objects
+        var txList: [Transaction] = []
+        for (key, amount) in directDebts {
+            guard amount > 0.01 else { continue } // Skip negligible amounts
+
+            let parts = key.split(separator: "_").map(String.init)
+            guard parts.count == 2 else { continue }
+
+            let fromUID = parts[0]
+            let toUID = parts[1]
+            let fromName = nameMap[fromUID] ?? fromUID
+            let toName = nameMap[toUID] ?? toUID
+
+            txList.append(Transaction(
+                fromUID: fromUID,
+                fromName: fromName,
+                toUID: toUID,
+                toName: toName,
+                amount: amount
+            ))
+        }
+
+        // Sort by amount (largest first) for better UX
+        transactions = txList.sorted { $0.amount > $1.amount }
     }
 
     // MARK: - Listen to settlements
