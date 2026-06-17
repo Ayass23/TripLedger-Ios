@@ -172,6 +172,7 @@ struct FriendDetailView: View {
             } message: {
                 Text("\(friend.displayName) telah dihapus dari daftar teman.")
             }
+            .tint(.brandPrimary)
             .sheet(isPresented: $showReportSheet) {
                 ReportFriendSheet(
                     isPresented: $showReportSheet,
@@ -187,6 +188,7 @@ struct FriendDetailView: View {
             } message: {
                 Text("Terima kasih atas laporanmu. Tim kami akan meninjau laporan ini dan mengambil tindakan yang sesuai.")
             }
+            .tint(.brandPrimary)
         }
     }
 }

@@ -13,6 +13,9 @@ struct CreateExpenseFromReceiptView: View {
 
     // UI State
     @State private var step = 1
+    @State private var showBankAccountAlert = false
+    @State private var showEditBankView = false
+    @StateObject private var profileVM = ProfileViewModel()
 
     // Step 1: Info Dasar
     @State private var title = ""
@@ -69,8 +72,9 @@ struct CreateExpenseFromReceiptView: View {
         var isSelected: Bool = true
     }
     @State private var participants: [ParticipantEntry] = []
+    @State private var paidByParticipant: ParticipantEntry?
 
-    private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) }
+    private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) && paidByParticipant != nil }
 
     // Step 3: Item-based Splits
     struct ItemEntry: Identifiable, Hashable {
@@ -249,6 +253,14 @@ struct CreateExpenseFromReceiptView: View {
                 participants = trip.members.map { member in
                     ParticipantEntry(id: member.uid, uid: member.uid, name: member.displayName, isSelected: true)
                 }
+                // Set default payer to current user, or first participant if current user not found
+                if let currentUser = authVM.currentUser {
+                    paidByParticipant = participants.first(where: { $0.uid == currentUser.uid })
+                }
+                // Fallback to first participant if payer still not set
+                if paidByParticipant == nil {
+                    paidByParticipant = participants.first
+                }
                 print("👥 [CreateExpenseFromReceiptView] Loaded \(participants.count) participants from trip")
             }
 
@@ -281,6 +293,30 @@ struct CreateExpenseFromReceiptView: View {
         }
         .sheet(isPresented: $showAddItem) {
             addItemSheet()
+        }
+        .sheet(isPresented: $showEditBankView) {
+            NavigationStack {
+                EditBankView(profileVM: profileVM)
+                    .environmentObject(authVM)
+            }
+        }
+        .alert("Rekening Belum Diisi", isPresented: $showBankAccountAlert) {
+            Button("Batal", role: .cancel) {
+                // User stays on step 2
+            }
+            Button("Isi Rekening") {
+                showEditBankView = true
+            }
+        } message: {
+            Text("Orang yang bayar dulu belum punya nomor rekening. Silakan isi rekening terlebih dahulu.")
+        }
+        .tint(.brandPrimary)
+        .onChange(of: showEditBankView) { isShowing in
+            if !isShowing && step == 2 {
+                if !checkBankAccountBeforeContinue() {
+                    withAnimation { step += 1 }
+                }
+            }
         }
     }
 
@@ -502,6 +538,65 @@ struct CreateExpenseFromReceiptView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                }
+            }
+
+            // Payer Selection Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("💳 Siapa yang bayar dulu?")
+                            .font(AppFont.headline())
+                            .foregroundColor(.textPrimary)
+                        Text("Orang ini yang harus dibayar balik")
+                            .font(AppFont.caption())
+                            .foregroundColor(.textPrimary.opacity(0.6))
+                    }
+                    Spacer()
+                }
+
+                VStack(spacing: 12) {
+                    ForEach(participants.filter { $0.isSelected }) { participant in
+                        Button {
+                            paidByParticipant = participant
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: paidByParticipant?.id == participant.id ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(paidByParticipant?.id == participant.id ? .brandPrimary : .textPrimary.opacity(0.3))
+                                    .font(.system(size: 22))
+
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.brandAccent.opacity(0.12))
+                                        .frame(width: 36, height: 36)
+                                    Text(String(participant.name.prefix(1)).uppercased())
+                                        .font(AppFont.caption())
+                                        .foregroundColor(.brandAccent)
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(participant.name)
+                                        .font(AppFont.subheadline())
+                                        .foregroundColor(.textPrimary)
+                                    if participant.uid == authVM.currentUser?.uid {
+                                        Text("Kamu")
+                                            .font(AppFont.caption2())
+                                            .foregroundColor(.textPrimary.opacity(0.5))
+                                    }
+                                }
+
+                                Spacer()
+                            }
+                            .padding(14)
+                            .background(Color.cardFallback)
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppRadius.md)
+                                    .stroke(paidByParticipant?.id == participant.id ? Color.brandPrimary : Color.borderSoft, lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
@@ -915,7 +1010,7 @@ struct CreateExpenseFromReceiptView: View {
 
                 if step < 3 {
                     Button {
-                        withAnimation { step += 1 }
+                        handleNextStep()
                     } label: {
                         Text("Selanjutnya")
                             .font(AppFont.headline())
@@ -1006,6 +1101,36 @@ struct CreateExpenseFromReceiptView: View {
         }
     }
 
+    // MARK: - Navigation & Validation
+    private func handleNextStep() {
+        // Check bank account before going to step 3
+        if step == 2 {
+            if checkBankAccountBeforeContinue() {
+                showBankAccountAlert = true
+                return
+            }
+        }
+        withAnimation { step += 1 }
+    }
+
+    private func checkBankAccountBeforeContinue() -> Bool {
+        // Only check if payer is current user
+        guard let payer = paidByParticipant,
+              let currentUser = authVM.currentUser else {
+            return false
+        }
+
+        // Only check bank account if payer is current user
+        if payer.uid == currentUser.uid {
+            // Check if current user has bank account
+            if currentUser.bankInfo == nil {
+                return true  // Show alert
+            }
+        }
+
+        return false  // No alert needed
+    }
+
     // MARK: - Save
     private func saveExpense() async {
         guard let user = authVM.currentUser else { return }
@@ -1050,14 +1175,24 @@ struct CreateExpenseFromReceiptView: View {
             }
         }
 
+        // Get payer info
+        guard let payer = paidByParticipant else { return }
+
+        // Get bank account info for payer (only if payer is current user)
+        var paidByBankAccount: String? = nil
+        if payer.uid == user.uid, let bankInfo = user.bankInfo {
+            paidByBankAccount = "\(bankInfo.bankName) - \(bankInfo.accountNumber) a.n. \(bankInfo.accountName)"
+        }
+
         await expenseVM.addExpense(
             tripID: trip.id ?? "",
             title: title,
             amount: calculatedTotal,
             currency: currency,
             category: category,
-            paidByUID: user.uid,
-            paidByName: user.displayName,
+            paidByUID: payer.uid,
+            paidByName: payer.name,
+            paidByBankAccount: paidByBankAccount,
             splitType: .custom,  // Always use custom for item-based
             members: trip.members,
             customSplits: finalSplits,

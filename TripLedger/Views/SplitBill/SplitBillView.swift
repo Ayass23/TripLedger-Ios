@@ -122,16 +122,16 @@ struct SplitBillView: View {
 
     // MARK: - Header
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Split Bill")
-                .font(AppFont.title1())
-                .foregroundColor(.textPrimary)
-            Text("Bagi tagihan dengan teman-temanmu")
-                .font(AppFont.footnote())
-                .foregroundColor(.textPrimary.opacity(0.5))
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SPLIT BILL")
+                    .font(AppFont.title1())
+                    .foregroundColor(.brandPrimary)
+            }
+            Spacer()
         }
         .padding(.horizontal, 20)
-        .padding(.top, 60)
+        .padding(.top, 30)
         .padding(.bottom, 24)
     }
 

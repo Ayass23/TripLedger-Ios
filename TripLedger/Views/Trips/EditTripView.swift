@@ -170,6 +170,7 @@ struct EditTripView: View {
             } message: {
                 Text("Informasi trip telah diperbarui.")
             }
+            .tint(.brandPrimary)
         }
         .onAppear {
             // Initialize with current trip data

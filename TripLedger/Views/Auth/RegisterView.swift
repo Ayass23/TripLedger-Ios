@@ -271,6 +271,7 @@ struct RegisterView: View {
         } message: {
             Text("Akun kamu telah disuspend oleh admin.\n\nSilakan hubungi admin untuk informasi lebih lanjut atau ajukan banding.")
         }
+        .tint(.brandPrimary)
         .preferredColorScheme(.dark)
     }
 

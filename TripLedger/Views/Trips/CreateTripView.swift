@@ -61,6 +61,7 @@ struct CreateTripView: View {
         } message: {
             Text("Trip \"\(name)\" berhasil dibuat. Selamat berpetualang!")
         }
+        .tint(.brandPrimary)
     }
 
     // ==========================================

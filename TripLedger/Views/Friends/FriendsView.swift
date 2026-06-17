@@ -64,19 +64,17 @@ struct FriendsView: View {
 
     // MARK: - Header Section
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("DAFTAR TEMAN")
-                .font(AppFont.title1())
-                .foregroundColor(.brandPrimary)
-
-            Text("\(friendsVM.friends.count) teman")
-                .font(AppFont.subheadline())
-                .foregroundColor(.textSecondary)
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("DAFTAR TEMAN")
+                    .font(AppFont.title1())
+                    .foregroundColor(.brandPrimary)
+            }
+            Spacer()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
         .padding(.top, 30)
-        .padding(.bottom, 12)
+        .padding(.bottom, 24)
     }
 
     // MARK: - Search Bar
@@ -378,6 +376,7 @@ struct FriendRequestRow: View {
         } message: {
             Text(alertMessage)
         }
+        .tint(.brandPrimary)
     }
 
     private func timeAgo(from timestamp: Timestamp) -> String {

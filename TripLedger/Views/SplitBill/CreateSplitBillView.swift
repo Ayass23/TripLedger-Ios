@@ -22,6 +22,8 @@ struct CreateSplitBillView: View {
     @State private var category    = ExpenseCategory.food
     @State private var notes       = ""
     @State private var transactionDate = Date()
+    @State private var showImagePicker = false
+    @State private var selectedImage: UIImage? = nil
 
     // Additional charges (editable)
     @State private var taxAmountStr = ""
@@ -183,8 +185,49 @@ struct CreateSplitBillView: View {
     var body: some View {
         NavigationStack {
             mainContentView
+                .onAppear(perform: setupForm)
+                .onChange(of: totalAmount, perform: handleTotalAmountChange)
+                .onChange(of: amountStr, perform: handleAmountStrChange)
+                .onChange(of: taxAmountStr, perform: handleTaxAmountChange)
+                .onChange(of: serviceChargeStr, perform: handleServiceChargeChange)
+                .onChange(of: discountStr, perform: handleDiscountChange)
+                .onChange(of: showEditBankView, perform: handleBankViewDismiss)
         }
-        .onAppear {
+        .sheet(isPresented: $showAddGuest) {
+            AddParticipantView(participants: $participants)
+                .environmentObject(authVM)
+                .environmentObject(friendsVM)
+        }
+        .sheet(item: $showEditItem) { item in
+            editItemSheet(item: item)
+        }
+        .sheet(isPresented: $showAddItem) {
+            addItemSheet()
+        }
+        .sheet(isPresented: $showEditBankView) {
+            NavigationStack {
+                EditBankView(profileVM: profileVM)
+                    .environmentObject(authVM)
+            }
+        }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(selectedImage: $selectedImage)
+        }
+        .alert("Rekening Belum Diisi", isPresented: $showBankAccountAlert) {
+            Button("Batal", role: .cancel) {
+                // User stays on step 2, can change payer or go back
+            }
+            Button("Isi Rekening") {
+                showEditBankView = true
+            }
+        } message: {
+            Text("Orang yang bayar dulu belum punya nomor rekening. Silakan isi rekening terlebih dahulu.")
+        }
+        .tint(.brandPrimary)
+    }
+
+    // MARK: - Setup & Handlers
+    private func setupForm() {
             print("\n📋 [CreateSplitBillView] Initializing form...")
             print("   📸 Received receiptImage: \(receiptImage != nil)")
             print("   🔍 Received scannedResult: \(scannedResult != nil)")
@@ -290,62 +333,46 @@ struct CreateSplitBillView: View {
             }
 
             print("📋 [CreateSplitBillView] Form initialized\n")
+    }
+
+    private func handleTotalAmountChange(_ newAmount: Double) {
+        let isSingleItem = items.count == 1
+        let isDefaultItem = items.first?.name == "Total Tagihan"
+        if isSingleItem && isDefaultItem {
+            let newItem = ItemEntry(
+                name: "Total Tagihan",
+                price: newAmount,
+                quantity: 1
+            )
+            items = [newItem]
         }
-        .onChange(of: totalAmount) { _ in
-            // Update items if total changes and we only have the default item
-            if items.count == 1 && items.first?.name == "Total Tagihan" {
-                items = [ItemEntry(name: "Total Tagihan", price: totalAmount, quantity: 1)]
-            }
-        }
-        .onChange(of: amountStr) { newValue in
-            let formatted = newValue.formattedAsCurrency()
-            if amountStr != formatted { amountStr = formatted }
-        }
-        .onChange(of: taxAmountStr) { newValue in
-            let formatted = newValue.formattedAsCurrency()
-            if taxAmountStr != formatted { taxAmountStr = formatted }
-        }
-        .onChange(of: serviceChargeStr) { newValue in
-            let formatted = newValue.formattedAsCurrency()
-            if serviceChargeStr != formatted { serviceChargeStr = formatted }
-        }
-        .onChange(of: discountStr) { newValue in
-            let formatted = newValue.formattedAsCurrency()
-            if discountStr != formatted { discountStr = formatted }
-        }
-        .sheet(isPresented: $showAddGuest) {
-            AddParticipantView(participants: $participants)
-                .environmentObject(authVM)
-                .environmentObject(friendsVM)
-        }
-        .sheet(item: $showEditItem) { item in
-            editItemSheet(item: item)
-        }
-        .sheet(isPresented: $showAddItem) {
-            addItemSheet()
-        }
-        .sheet(isPresented: $showEditBankView) {
-            NavigationStack {
-                EditBankView(profileVM: profileVM)
-                    .environmentObject(authVM)
-            }
-        }
-        .alert("Rekening Belum Diisi", isPresented: $showBankAccountAlert) {
-            Button("Isi Rekening") {
-                showEditBankView = true
-            }
-        } message: {
-            Text("Orang yang bayar dulu belum punya nomor rekening. Silakan isi rekening terlebih dahulu.")
-        }
-        .onChange(of: showEditBankView) { isShowing in
-            // After user dismisses EditBankView, check if bank account is now filled
-            if !isShowing && step == 2 {
-                // Check again if bank account is filled
-                if !checkBankAccountBeforeContinue() {
-                    // Bank account is now filled, proceed to next step
-                    withAnimation { step += 1 }
-                    print("✅ [CreateSplitBillView] Bank account filled - proceeding to step 3")
-                }
+    }
+
+    private func handleAmountStrChange(_ newValue: String) {
+        let formatted = newValue.formattedAsCurrency()
+        if amountStr != formatted { amountStr = formatted }
+    }
+
+    private func handleTaxAmountChange(_ newValue: String) {
+        let formatted = newValue.formattedAsCurrency()
+        if taxAmountStr != formatted { taxAmountStr = formatted }
+    }
+
+    private func handleServiceChargeChange(_ newValue: String) {
+        let formatted = newValue.formattedAsCurrency()
+        if serviceChargeStr != formatted { serviceChargeStr = formatted }
+    }
+
+    private func handleDiscountChange(_ newValue: String) {
+        let formatted = newValue.formattedAsCurrency()
+        if discountStr != formatted { discountStr = formatted }
+    }
+
+    private func handleBankViewDismiss(_ isShowing: Bool) {
+        if !isShowing && step == 2 {
+            if !checkBankAccountBeforeContinue() {
+                withAnimation { step += 1 }
+                print("✅ [CreateSplitBillView] Bank account filled - proceeding to step 3")
             }
         }
     }
@@ -355,6 +382,56 @@ struct CreateSplitBillView: View {
         VStack(alignment: .leading, spacing: 24) {
             if source == .scan, let result = scannedResult {
                 scanResultBanner(result)
+            }
+
+            // Foto Struk (only for manual input)
+            if source == .manual {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Foto Struk (Opsional)")
+                        .font(AppFont.subheadline())
+                        .foregroundColor(.textPrimary.opacity(0.6))
+
+                    if let image = selectedImage {
+                        ZStack(alignment: .topTrailing) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 140)
+                                .frame(maxWidth: .infinity)
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                                .contentShape(Rectangle())
+                                .onTapGesture { showImagePicker = true }
+
+                            Button {
+                                selectedImage = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white)
+                                    .shadow(radius: 4)
+                            }
+                            .padding(8)
+                        }
+                    } else {
+                        Button { showImagePicker = true } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "photo.badge.plus")
+                                    .font(.system(size: 18))
+                                Text("Pilih Foto Struk")
+                                    .font(AppFont.subheadline())
+                            }
+                            .foregroundColor(Color.accentFallback)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.accentFallback.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppRadius.md)
+                                    .stroke(Color.accentFallback.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                            )
+                        }
+                    }
+                }
             }
 
             // Nama Tagihan
@@ -1222,11 +1299,13 @@ struct CreateSplitBillView: View {
         print("   💰 amountStr: '\(amountStr)'")
         print("   💰 totalAmount: \(totalAmount)")
         print("   💰 calculatedTotal: \(calculatedTotal)")
-        print("   📸 receiptImage available: \(receiptImage != nil)")
+        print("   📸 receiptImage (from scan): \(receiptImage != nil)")
+        print("   📸 selectedImage (manual): \(selectedImage != nil)")
 
-        // Upload receipt image if available
+        // Upload receipt image if available (from scan or manual)
         var receiptURL: String? = nil
-        if let image = receiptImage {
+        let imageToUpload = receiptImage ?? selectedImage
+        if let image = imageToUpload {
             print("📸 [CreateSplitBillView] Uploading receipt image...")
 
             // Show loading overlay

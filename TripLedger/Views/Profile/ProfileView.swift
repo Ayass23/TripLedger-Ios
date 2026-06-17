@@ -134,6 +134,7 @@ struct ProfileView: View {
                 Text(error)
             }
         }
+        .tint(.brandPrimary)
         // Alert for success
         .alert("Berhasil!", isPresented: .constant(profileVM.successMessage != nil)) {
             Button("OK") {
@@ -144,6 +145,7 @@ struct ProfileView: View {
                 Text(success)
             }
         }
+        .tint(.brandPrimary)
     }
 
     // MARK: - Header

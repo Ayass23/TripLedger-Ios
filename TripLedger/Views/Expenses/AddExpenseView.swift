@@ -13,7 +13,10 @@ struct AddExpenseView: View {
     
     // UI State
     @State private var step = 1
-    
+    @State private var showBankAccountAlert = false
+    @State private var showEditBankView = false
+    @StateObject private var profileVM = ProfileViewModel()
+
     // Step 1: Info
     @State private var title      = ""
     @State private var amountStr  = ""
@@ -33,8 +36,9 @@ struct AddExpenseView: View {
         var isSelected: Bool = true
     }
     @State private var participants: [ParticipantEntry] = []
+    @State private var paidByParticipant: ParticipantEntry?
 
-    private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) }
+    private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) && paidByParticipant != nil }
 
     // Step 3: Item-based Splits
     struct ItemEntry: Identifiable, Hashable {
@@ -125,6 +129,14 @@ struct AddExpenseView: View {
                 participants = trip.members.map { member in
                     ParticipantEntry(id: member.uid, uid: member.uid, name: member.displayName, isSelected: true)
                 }
+                // Set default payer to current user, or first participant if current user not found
+                if let currentUser = authVM.currentUser {
+                    paidByParticipant = participants.first(where: { $0.uid == currentUser.uid })
+                }
+                // Fallback to first participant if payer still not set
+                if paidByParticipant == nil {
+                    paidByParticipant = participants.first
+                }
             }
             // Init Items with single default item
             if items.isEmpty && amount > 0 {
@@ -149,13 +161,41 @@ struct AddExpenseView: View {
         .sheet(isPresented: $showAddItem) {
             addItemSheet()
         }
+        .sheet(isPresented: $showEditBankView) {
+            NavigationStack {
+                EditBankView(profileVM: profileVM)
+                    .environmentObject(authVM)
+            }
+        }
+        .alert("Rekening Belum Diisi", isPresented: $showBankAccountAlert) {
+            Button("Batal", role: .cancel) {
+                // User stays on step 2
+            }
+            Button("Isi Rekening") {
+                showEditBankView = true
+            }
+        } message: {
+            Text("Orang yang bayar dulu belum punya nomor rekening. Silakan isi rekening terlebih dahulu.")
+        }
+        .tint(.brandPrimary)
+        .onChange(of: showEditBankView) { isShowing in
+            if !isShowing && step == 2 {
+                if !checkBankAccountBeforeContinue() {
+                    withAnimation { step += 1 }
+                }
+            }
+        }
     }
     
     // MARK: - Step 1: Info Dasar
     private var step1View: some View {
         VStack(alignment: .leading, spacing: 24) {
             // Receipt Image
-            fieldSection("Foto Struk (Opsional)") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Foto Struk (Opsional)")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary.opacity(0.6))
+
                 if let image = selectedImage {
                     ZStack(alignment: .topTrailing) {
                         Image(uiImage: image)
@@ -166,7 +206,7 @@ struct AddExpenseView: View {
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                             .contentShape(Rectangle())
                             .onTapGesture { showImagePicker = true }
-                        
+
                         Button {
                             selectedImage = nil
                         } label: {
@@ -197,16 +237,72 @@ struct AddExpenseView: View {
                     }
                 }
             }
-            
-            fieldSection("Nama Pengeluaran") {
-                TLTextField(icon: "tag.fill", placeholder: "Cth: Makan Siang Bersama", text: $title)
+
+            // Nama Pengeluaran
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Nama Pengeluaran")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary.opacity(0.6))
+
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.brandPrimary.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "tag.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.brandPrimary)
+                    }
+
+                    TextField("Cth: Makan Siang Bersama", text: $title)
+                        .font(AppFont.subheadline())
+                        .foregroundColor(.textPrimary)
+                }
+                .padding(14)
+                .background(Color.cardFallback)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.md)
+                        .stroke(title.isEmpty ? Color.borderSoft : Color.brandPrimary.opacity(0.3), lineWidth: 1)
+                )
             }
-            
-            fieldSection("Jumlah (\(trip.currency))") {
-                TLTextField(icon: "banknote.fill", placeholder: "0", text: $amountStr, keyboardType: .decimalPad)
+
+            // Jumlah
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Jumlah (\(trip.currency))")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary.opacity(0.6))
+
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.successGreen.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "banknote.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.successGreen)
+                    }
+
+                    TextField("0", text: $amountStr)
+                        .keyboardType(.decimalPad)
+                        .font(AppFont.headline())
+                        .foregroundColor(.textPrimary)
+                }
+                .padding(14)
+                .background(Color.cardFallback)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.md)
+                        .stroke(amountStr.isEmpty ? Color.borderSoft : Color.successGreen.opacity(0.3), lineWidth: 1)
+                )
             }
-            
-            fieldSection("Kategori") {
+
+            // Kategori
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Kategori")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary.opacity(0.6))
+
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: 10) {
                     ForEach(ExpenseCategory.allCases, id: \.self) { cat in
                         Button {
@@ -233,9 +329,34 @@ struct AddExpenseView: View {
                     }
                 }
             }
-            
-            fieldSection("Catatan (opsional)") {
-                TLTextField(icon: "note.text", placeholder: "Tambahkan catatan...", text: $notes)
+
+            // Catatan
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Catatan (opsional)")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary.opacity(0.6))
+
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.warningAmber.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "note.text")
+                            .font(.system(size: 18))
+                            .foregroundColor(.warningAmber)
+                    }
+
+                    TextField("Tambahkan catatan...", text: $notes)
+                        .font(AppFont.subheadline())
+                        .foregroundColor(.textPrimary)
+                }
+                .padding(14)
+                .background(Color.cardFallback)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.md)
+                        .stroke(Color.borderSoft, lineWidth: 1)
+                )
             }
         }
     }
@@ -288,6 +409,65 @@ struct AddExpenseView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                }
+            }
+
+            // Payer Selection Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("💳 Siapa yang bayar dulu?")
+                            .font(AppFont.headline())
+                            .foregroundColor(.textPrimary)
+                        Text("Orang ini yang harus dibayar balik")
+                            .font(AppFont.caption())
+                            .foregroundColor(.textPrimary.opacity(0.6))
+                    }
+                    Spacer()
+                }
+
+                VStack(spacing: 12) {
+                    ForEach(participants.filter { $0.isSelected }) { participant in
+                        Button {
+                            paidByParticipant = participant
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: paidByParticipant?.id == participant.id ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(paidByParticipant?.id == participant.id ? .brandPrimary : .textPrimary.opacity(0.3))
+                                    .font(.system(size: 22))
+
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.brandAccent.opacity(0.12))
+                                        .frame(width: 36, height: 36)
+                                    Text(String(participant.name.prefix(1)).uppercased())
+                                        .font(AppFont.caption())
+                                        .foregroundColor(.brandAccent)
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(participant.name)
+                                        .font(AppFont.subheadline())
+                                        .foregroundColor(.textPrimary)
+                                    if participant.uid == authVM.currentUser?.uid {
+                                        Text("Kamu")
+                                            .font(AppFont.caption2())
+                                            .foregroundColor(.textPrimary.opacity(0.5))
+                                    }
+                                }
+
+                                Spacer()
+                            }
+                            .padding(14)
+                            .background(Color.cardFallback)
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppRadius.md)
+                                    .stroke(paidByParticipant?.id == participant.id ? Color.brandPrimary : Color.borderSoft, lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
@@ -504,7 +684,7 @@ struct AddExpenseView: View {
                 
                 if step < 3 {
                     Button {
-                        withAnimation { step += 1 }
+                        handleNextStep()
                     } label: {
                         Text("Selanjutnya")
                             .font(AppFont.headline())
@@ -534,7 +714,37 @@ struct AddExpenseView: View {
             .background(Color.baseFallback)
         }
     }
-    
+
+    // MARK: - Navigation & Validation
+    private func handleNextStep() {
+        // Check bank account before going to step 3
+        if step == 2 {
+            if checkBankAccountBeforeContinue() {
+                showBankAccountAlert = true
+                return
+            }
+        }
+        withAnimation { step += 1 }
+    }
+
+    private func checkBankAccountBeforeContinue() -> Bool {
+        // Only check if payer is current user
+        guard let payer = paidByParticipant,
+              let currentUser = authVM.currentUser else {
+            return false
+        }
+
+        // Only check bank account if payer is current user
+        if payer.uid == currentUser.uid {
+            // Check if current user has bank account
+            if currentUser.bankInfo == nil {
+                return true  // Show alert
+            }
+        }
+
+        return false  // No alert needed
+    }
+
     // MARK: - Save Logic
     private func saveExpense() async {
         guard let user = authVM.currentUser else { return }
@@ -572,9 +782,12 @@ struct AddExpenseView: View {
             }
         }
 
-        // Get bank account info for current user (who is paying)
+        // Get payer info
+        guard let payer = paidByParticipant else { return }
+
+        // Get bank account info for payer (only if payer is current user)
         var paidByBankAccount: String? = nil
-        if let bankInfo = user.bankInfo {
+        if payer.uid == user.uid, let bankInfo = user.bankInfo {
             paidByBankAccount = "\(bankInfo.bankName) - \(bankInfo.accountNumber) a.n. \(bankInfo.accountName)"
         }
 
@@ -584,8 +797,8 @@ struct AddExpenseView: View {
             amount: calculatedTotal,
             currency: trip.currency,
             category: category,
-            paidByUID: user.uid,
-            paidByName: user.displayName,
+            paidByUID: payer.uid,
+            paidByName: payer.name,
             paidByBankAccount: paidByBankAccount,
             splitType: .custom,  // Always use custom for item-based
             members: trip.members,

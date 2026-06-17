@@ -6,42 +6,34 @@ struct AdminDashboardView: View {
     @EnvironmentObject private var adminVM: AdminViewModel
 
     @State private var selectedTab = 0
+    @State private var kelolaSegment = 0 // 0: Pengguna, 1: Laporan
+    @State private var userFilterTab = 0 // 0: Semua, 1: Aktif, 2: Tersuspend
     @State private var searchQuery = ""
 
     var body: some View {
-        ZStack {
-            // Background Gradient
-            LinearGradient(
-                colors: [
-                    Color(hex: "#7C3AED").opacity(0.05),
-                    Color.baseFallback
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+        TabView(selection: $selectedTab) {
+            // Tab 1: Home
+            homeTab
+                .tabItem {
+                    Label("Home", systemImage: "house.fill")
+                }
+                .tag(0)
 
-            VStack(spacing: 0) {
-                // Beautiful Header
-                adminHeader
-
-                // Stats Cards
-                statsCards
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-
-                // Custom Tab Selector
-                tabSelector
-                    .padding(.top, 20)
-
-                // Tab Content
-                if selectedTab == 0 {
-                    usersManagementTab
+            // Tab 2: Kelola
+            Group {
+                if pendingReportsCount > 0 {
+                    kelolaTab
+                        .badge(pendingReportsCount)
                 } else {
-                    reportsManagementTab
+                    kelolaTab
                 }
             }
+            .tabItem {
+                Label("Kelola", systemImage: "gearshape.fill")
+            }
+            .tag(1)
         }
+        .tint(Color(hex: "#7C3AED"))
         .onAppear {
             Task {
                 await adminVM.loadAllUsers()
@@ -50,45 +42,97 @@ struct AdminDashboardView: View {
         }
     }
 
-    // MARK: - Admin Header
-    private var adminHeader: some View {
-        ZStack {
-            // Gradient Background
-            LinearGradient(
-                colors: [
-                    Color(hex: "#7C3AED"),
-                    Color(hex: "#5B21B6")
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+    // MARK: - Home Tab
+    private var homeTab: some View {
+        NavigationStack {
+            ZStack {
+                // Background Gradient
+                LinearGradient(
+                    colors: [
+                        Color(hex: "#7C3AED").opacity(0.15),
+                        Color(hex: "#7C3AED").opacity(0.08),
+                        Color.baseFallback
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
 
-            VStack(spacing: 16) {
-                HStack(spacing: 12) {
-                    // Admin Icon
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.2))
-                            .frame(width: 50, height: 50)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Stats Cards
+                        statsCards
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
 
-                        Image(systemName: "shield.lefthalf.filled")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.white)
+                        // Recent Reports Section
+                        if !adminVM.allReports.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("📋 Laporan Terbaru")
+                                        .font(AppFont.headline())
+                                        .foregroundColor(.textPrimary)
+
+                                    Spacer()
+
+                                    Button {
+                                        selectedTab = 1
+                                        kelolaSegment = 1
+                                    } label: {
+                                        Text("Lihat Semua")
+                                            .font(AppFont.caption())
+                                            .foregroundColor(Color(hex: "#7C3AED"))
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+
+                                LazyVStack(spacing: 12) {
+                                    ForEach(recentReports) { report in
+                                        ReportCard(report: report, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            }
+                        }
+
+                        // Recent Users Section
+                        if !adminVM.allUsers.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("👥 Pengguna Terbaru")
+                                        .font(AppFont.headline())
+                                        .foregroundColor(.textPrimary)
+
+                                    Spacer()
+
+                                    Button {
+                                        selectedTab = 1
+                                        kelolaSegment = 0
+                                    } label: {
+                                        Text("Lihat Semua")
+                                            .font(AppFont.caption())
+                                            .foregroundColor(Color(hex: "#7C3AED"))
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+
+                                LazyVStack(spacing: 12) {
+                                    ForEach(recentUsers) { user in
+                                        UserManagementCard(user: user, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            }
+                        }
+
+                        Spacer(minLength: 40)
                     }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Admin Dashboard")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-
-                        Text(authVM.currentUser?.displayName ?? "Administrator")
-                            .font(AppFont.subheadline())
-                            .foregroundColor(.white.opacity(0.9))
-                    }
-
-                    Spacer()
-
-                    // Logout Button
+                }
+            }
+            .navigationTitle("Dashboard")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         authVM.logout()
                     } label: {
@@ -102,21 +146,21 @@ struct AdminDashboardView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.2))
+
                         .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                        )
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 60)
-                .padding(.bottom, 20)
+            }
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .onAppear {
+                let appearance = UINavigationBarAppearance()
+                appearance.configureWithTransparentBackground()
+                appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(Color(hex: "#7C3AED"))]
+                appearance.titleTextAttributes = [.foregroundColor: UIColor(Color(hex: "#7C3AED"))]
+                UINavigationBar.appearance().standardAppearance = appearance
+                UINavigationBar.appearance().scrollEdgeAppearance = appearance
             }
         }
-        .frame(height: 140)
-        .ignoresSafeArea(edges: .top)
     }
 
     // MARK: - Stats Cards
@@ -145,6 +189,14 @@ struct AdminDashboardView: View {
         }
     }
 
+    private var recentReports: [ReportModel] {
+        Array(adminVM.allReports.sorted { $0.createdAt.dateValue() > $1.createdAt.dateValue() }.prefix(3))
+    }
+
+    private var recentUsers: [UserModel] {
+        Array(adminVM.allUsers.sorted { $0.createdAt.dateValue() > $1.createdAt.dateValue() }.prefix(3))
+    }
+
     private var pendingReportsCount: Int {
         adminVM.allReports.filter { $0.status == .pending }.count
     }
@@ -153,59 +205,86 @@ struct AdminDashboardView: View {
         adminVM.allUsers.filter { $0.isSuspended }.count
     }
 
-    // MARK: - Tab Selector
-    private var tabSelector: some View {
-        HStack(spacing: 0) {
-            tabButton(title: "Kelola Pengguna", icon: "person.2.fill", index: 0)
-            tabButton(title: "Kelola Laporan", icon: "exclamationmark.triangle.fill", index: 1, badge: pendingReportsCount)
-        }
-        .padding(.horizontal, 20)
-        .background(Color.clear)
-    }
+    // MARK: - Kelola Tab
+    private var kelolaTab: some View {
+        NavigationStack {
+            ZStack {
+                // Background Gradient
+                LinearGradient(
+                    colors: [
+                        Color(hex: "#7C3AED").opacity(0.15),
+                        Color(hex: "#7C3AED").opacity(0.08),
+                        Color.baseFallback
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
 
-    private func tabButton(title: String, icon: String, index: Int, badge: Int? = nil) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedTab = index
-            }
-        } label: {
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(title)
-                        .font(AppFont.subheadline())
-                        .fontWeight(selectedTab == index ? .bold : .semibold)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Segmented Control
+                        segmentedControl
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
 
-                    if let count = badge, count > 0 {
-                        Text("\(count)")
-                            .font(AppFont.caption2())
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Color.errorRed)
-                            .clipShape(Capsule())
+                        // Content based on segment
+                        if kelolaSegment == 0 {
+                            kelolaUserContent
+                        } else {
+                            kelolaReportContent
+                        }
                     }
                 }
-                .foregroundColor(selectedTab == index ? Color(hex: "#7C3AED") : .textPrimary.opacity(0.5))
-                .padding(.vertical, 12)
-
-                Rectangle()
-                    .fill(selectedTab == index ?
-                          LinearGradient(
-                            colors: [Color(hex: "#7C3AED"), Color(hex: "#5B21B6")],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                          ) : LinearGradient(colors: [Color.clear], startPoint: .leading, endPoint: .trailing))
-                    .frame(height: 3)
-                    .clipShape(Capsule())
             }
+            .navigationTitle("Kelola")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+        }
+    }
+
+    // MARK: - Segmented Control
+    private var segmentedControl: some View {
+        HStack(spacing: 0) {
+            segmentButton(title: "Kelola Pengguna", icon: "person.2.fill", index: 0)
+            segmentButton(title: "Kelola Laporan", icon: "exclamationmark.triangle.fill", index: 1)
+        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: Color.black.opacity(0.06), radius: 8, y: 3)
+    }
+
+    private func segmentButton(title: String, icon: String, index: Int) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                kelolaSegment = index
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(title)
+                    .font(AppFont.caption())
+                    .fontWeight(.semibold)
+            }
+            .foregroundColor(kelolaSegment == index ? .white : .textPrimary.opacity(0.6))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                kelolaSegment == index ?
+                LinearGradient(
+                    colors: [Color(hex: "#7C3AED"), Color(hex: "#5B21B6")],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ) : LinearGradient(colors: [Color.clear], startPoint: .leading, endPoint: .trailing)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Users Management Tab
-    private var usersManagementTab: some View {
+    // MARK: - Kelola User Content
+    private var kelolaUserContent: some View {
         VStack(spacing: 0) {
             // Search Bar
             HStack(spacing: 12) {
@@ -237,7 +316,12 @@ struct AdminDashboardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: Color.black.opacity(0.06), radius: 10, y: 4)
             .padding(.horizontal, 20)
-            .padding(.vertical, 20)
+            .padding(.top, 16)
+
+            // Filter Tabs
+            userFilterTabs
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
             // Users List
             if adminVM.isLoading {
@@ -245,19 +329,80 @@ struct AdminDashboardView: View {
                     .scaleEffect(1.3)
                     .tint(Color(hex: "#7C3AED"))
                     .padding(.top, 40)
-            } else if filteredUsers.isEmpty {
+            } else if filteredUsersByTab.isEmpty {
                 emptyUsersState
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 14) {
-                        ForEach(filteredUsers) { user in
-                            UserManagementCard(user: user, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
-                        }
+                LazyVStack(spacing: 14) {
+                    ForEach(filteredUsersByTab) { user in
+                        UserManagementCard(user: user, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 20)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 40)
             }
+        }
+    }
+
+    // MARK: - User Filter Tabs
+    private var userFilterTabs: some View {
+        HStack(spacing: 8) {
+            filterTab(title: "Semua", count: filteredUsers.count, index: 0)
+            filterTab(title: "Aktif", count: activeUsers.count, index: 1)
+            filterTab(title: "Tersuspend", count: suspendedUsers.count, index: 2)
+        }
+    }
+
+    private func filterTab(title: String, count: Int, index: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                userFilterTab = index
+            }
+        } label: {
+            VStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(AppFont.caption())
+                        .fontWeight(userFilterTab == index ? .bold : .semibold)
+
+                    Text("\(count)")
+                        .font(AppFont.caption2())
+                        .foregroundColor(userFilterTab == index ? .white : .textPrimary.opacity(0.5))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(userFilterTab == index ? Color(hex: "#7C3AED") : Color.textPrimary.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+                .foregroundColor(userFilterTab == index ? Color(hex: "#7C3AED") : .textPrimary.opacity(0.5))
+                .padding(.vertical, 8)
+
+                Rectangle()
+                    .fill(userFilterTab == index ? Color(hex: "#7C3AED") : Color.clear)
+                    .frame(height: 2.5)
+                    .clipShape(Capsule())
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var filteredUsers: [UserModel] {
+        adminVM.searchUsers(query: searchQuery)
+    }
+
+    private var activeUsers: [UserModel] {
+        filteredUsers.filter { !$0.isSuspended }
+    }
+
+    private var suspendedUsers: [UserModel] {
+        filteredUsers.filter { $0.isSuspended }
+    }
+
+    private var filteredUsersByTab: [UserModel] {
+        switch userFilterTab {
+        case 0: return filteredUsers
+        case 1: return activeUsers
+        case 2: return suspendedUsers
+        default: return filteredUsers
         }
     }
 
@@ -285,53 +430,48 @@ struct AdminDashboardView: View {
         .padding(.top, 60)
     }
 
-    private var filteredUsers: [UserModel] {
-        adminVM.searchUsers(query: searchQuery)
-    }
-
-    // MARK: - Reports Management Tab
-    private var reportsManagementTab: some View {
-        ScrollView {
-            LazyVStack(spacing: 14) {
-                // Pending Reports
-                if !pendingReports.isEmpty {
-                    sectionHeader("🔴 Menunggu Ditinjau", count: pendingReports.count, color: Color.errorRed)
-                    ForEach(pendingReports) { report in
-                        ReportCard(report: report, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
-                    }
-                }
-
-                // Reviewed Reports
-                if !reviewedReports.isEmpty {
-                    sectionHeader("👁️ Sedang Ditinjau", count: reviewedReports.count, color: Color.warningAmber)
-                    ForEach(reviewedReports) { report in
-                        ReportCard(report: report, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
-                    }
-                }
-
-                // Resolved Reports
-                if !resolvedReports.isEmpty {
-                    sectionHeader("✅ Diselesaikan", count: resolvedReports.count, color: Color.successGreen)
-                    ForEach(resolvedReports) { report in
-                        ReportCard(report: report, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
-                    }
-                }
-
-                // Dismissed Reports
-                if !dismissedReports.isEmpty {
-                    sectionHeader("❌ Ditolak", count: dismissedReports.count, color: Color.textSecondary)
-                    ForEach(dismissedReports) { report in
-                        ReportCard(report: report, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
-                    }
-                }
-
-                if adminVM.allReports.isEmpty {
-                    emptyReportsState
+    // MARK: - Kelola Report Content
+    private var kelolaReportContent: some View {
+        VStack(spacing: 14) {
+            // Pending Reports
+            if !pendingReports.isEmpty {
+                sectionHeader("🔴 Menunggu Ditinjau", count: pendingReports.count, color: Color.errorRed)
+                ForEach(pendingReports) { report in
+                    ReportCard(report: report, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
+
+            // Reviewed Reports
+            if !reviewedReports.isEmpty {
+                sectionHeader("👁️ Sedang Ditinjau", count: reviewedReports.count, color: Color.warningAmber)
+                ForEach(reviewedReports) { report in
+                    ReportCard(report: report, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
+                }
+            }
+
+            // Resolved Reports
+            if !resolvedReports.isEmpty {
+                sectionHeader("✅ Diselesaikan", count: resolvedReports.count, color: Color.successGreen)
+                ForEach(resolvedReports) { report in
+                    ReportCard(report: report, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
+                }
+            }
+
+            // Dismissed Reports
+            if !dismissedReports.isEmpty {
+                sectionHeader("❌ Ditolak", count: dismissedReports.count, color: Color.textSecondary)
+                ForEach(dismissedReports) { report in
+                    ReportCard(report: report, adminVM: adminVM, currentAdminUID: authVM.currentUser?.uid ?? "")
+                }
+            }
+
+            if adminVM.allReports.isEmpty {
+                emptyReportsState
+            }
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 40)
     }
 
     private func sectionHeader(_ title: String, count: Int, color: Color) -> some View {
@@ -591,6 +731,7 @@ struct UserManagementCard: View {
         } message: {
             Text("Aktifkan kembali akun \(user.displayName)? Pengguna akan bisa login ke aplikasi lagi.")
         }
+        .tint(.brandPrimary)
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -601,147 +742,90 @@ struct UserManagementCard: View {
     }
 }
 
-// MARK: - Report Card
+// MARK: - Report Card Component
 struct ReportCard: View {
     let report: ReportModel
     @ObservedObject var adminVM: AdminViewModel
     let currentAdminUID: String
 
-    @State private var showDetailSheet = false
+    @State private var showDetail = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Header with Category & Status
-            HStack {
-                HStack(spacing: 8) {
+        Button {
+            showDetail = true
+        } label: {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    // Category Icon
                     ZStack {
-                        Circle()
-                            .fill(Color.errorRed.opacity(0.15))
-                            .frame(width: 32, height: 32)
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(statusColor.opacity(0.15))
+                            .frame(width: 48, height: 48)
 
                         Image(systemName: report.category.icon)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.errorRed)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(statusColor)
                     }
 
-                    Text(report.category.displayName)
-                        .font(AppFont.caption())
-                        .fontWeight(.semibold)
-                        .foregroundColor(.textPrimary)
-                }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(report.reportedName)
+                            .font(AppFont.subheadline())
+                            .fontWeight(.bold)
+                            .foregroundColor(.textPrimary)
 
-                Spacer()
+                        Text(report.category.displayName)
+                            .font(AppFont.caption())
+                            .foregroundColor(.textSecondary)
 
-                Text(report.status.displayName)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color(hex: report.status.color))
-                    .clipShape(Capsule())
-            }
-
-            // Reported User
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Pengguna Dilaporkan:")
-                    .font(AppFont.caption2())
-                    .foregroundColor(.textSecondary)
-
-                HStack(spacing: 8) {
-                    Text(report.reportedName)
-                        .font(AppFont.subheadline())
-                        .fontWeight(.bold)
-                        .foregroundColor(.errorRed)
-
-                    Text("•")
-                        .foregroundColor(.textSecondary.opacity(0.5))
-
-                    Text(report.reportedEmail)
-                        .font(AppFont.caption())
-                        .foregroundColor(.textSecondary)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.errorRed.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            // Reporter
-            HStack(spacing: 4) {
-                Image(systemName: "person.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(.textSecondary.opacity(0.6))
-                Text("Dilaporkan oleh:")
-                    .font(AppFont.caption2())
-                    .foregroundColor(.textSecondary)
-                Text(report.reporterName)
-                    .font(AppFont.caption2())
-                    .fontWeight(.semibold)
-                    .foregroundColor(.textPrimary)
-            }
-
-            // Reason Preview
-            Text(report.reason)
-                .font(AppFont.caption())
-                .foregroundColor(.textPrimary.opacity(0.8))
-                .lineLimit(3)
-                .padding(.top, 4)
-
-            // Footer: Date & Action
-            HStack {
-                HStack(spacing: 4) {
-                    Image(systemName: "clock.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.textSecondary.opacity(0.6))
-                    Text(timeAgo(from: report.createdAt.dateValue()))
-                        .font(AppFont.caption2())
-                        .foregroundColor(.textSecondary)
-                }
-
-                Spacer()
-
-                // Action Button
-                if report.status == .pending || report.status == .reviewed {
-                    Button {
-                        showDetailSheet = true
-                    } label: {
                         HStack(spacing: 4) {
-                            Text("Tinjau")
-                                .font(AppFont.caption())
-                                .fontWeight(.semibold)
-                            Image(systemName: "arrow.right.circle.fill")
-                                .font(.system(size: 14))
+                            Image(systemName: "clock")
+                                .font(.system(size: 9))
+                            Text(timeAgo(from: report.createdAt.dateValue()))
+                                .font(AppFont.caption2())
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            LinearGradient(
-                                colors: [Color(hex: "#7C3AED"), Color(hex: "#5B21B6")],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .clipShape(Capsule())
+                        .foregroundColor(.textSecondary.opacity(0.7))
                     }
+
+                    Spacer()
+
+                    // Status Badge
+                    Text(report.status.displayName)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(statusColor)
+                        .clipShape(Capsule())
                 }
+
+                Divider()
+
+                Text(report.reason)
+                    .font(AppFont.caption())
+                    .foregroundColor(.textPrimary.opacity(0.8))
+                    .lineLimit(2)
             }
+            .padding(16)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(statusColor.opacity(0.2), lineWidth: 1.5)
+            )
+            .shadow(color: Color.black.opacity(0.06), radius: 8, y: 3)
         }
-        .padding(16)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    report.status == .pending ? Color.errorRed.opacity(0.3) : Color.borderSoft.opacity(0.5),
-                    lineWidth: report.status == .pending ? 2 : 1
-                )
-        )
-        .shadow(color: Color.black.opacity(report.status == .pending ? 0.08 : 0.04), radius: 8, y: 3)
-        .sheet(isPresented: $showDetailSheet) {
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showDetail) {
             ReportDetailSheet(report: report, adminVM: adminVM, currentAdminUID: currentAdminUID)
+        }
+    }
+
+    private var statusColor: Color {
+        switch report.status {
+        case .pending: return Color.errorRed
+        case .reviewed: return Color.warningAmber
+        case .resolved: return Color.successGreen
+        case .dismissed: return Color.textSecondary
         }
     }
 
@@ -769,206 +853,178 @@ struct ReportDetailSheet: View {
     @ObservedObject var adminVM: AdminViewModel
     let currentAdminUID: String
 
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.dismiss) private var dismiss
+
     @State private var adminNotes = ""
+    @State private var suspendUserOnResolve = false
     @State private var showResolveAlert = false
     @State private var showDismissAlert = false
-    @State private var suspendUserOnResolve = false
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.baseFallback.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Reporter Info
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Pelapor")
+                            .font(AppFont.caption())
+                            .foregroundColor(.textSecondary)
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Status Badge
-                        HStack {
-                            Spacer()
-                            Text(report.status.displayName)
-                                .font(AppFont.subheadline())
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 18)
-                                .padding(.vertical, 8)
-                                .background(Color(hex: report.status.color))
-                                .clipShape(Capsule())
-                            Spacer()
-                        }
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.brandPrimary.opacity(0.15))
+                                    .frame(width: 40, height: 40)
 
-                        // Reported User
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Pengguna Dilaporkan")
-                                .font(AppFont.subheadline())
-                                .foregroundColor(.textPrimary.opacity(0.6))
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(report.reportedName)
-                                    .font(AppFont.title3())
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.errorRed)
-
-                                Text(report.reportedEmail)
-                                    .font(AppFont.subheadline())
-                                    .foregroundColor(.textSecondary)
-
-                                Text("UID: \(report.reportedUID)")
-                                    .font(AppFont.caption2())
-                                    .foregroundColor(.textSecondary.opacity(0.7))
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.brandPrimary)
                             }
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.errorRed.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                        }
 
-                        // Reporter
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Dilaporkan Oleh")
-                                .font(AppFont.subheadline())
-                                .foregroundColor(.textPrimary.opacity(0.6))
-
-                            HStack {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(report.reporterName)
                                     .font(AppFont.subheadline())
+                                    .fontWeight(.semibold)
                                     .foregroundColor(.textPrimary)
-                                Text("(\(report.reporterUID))")
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+
+                    // Reported User Info
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Yang Dilaporkan")
+                            .font(AppFont.caption())
+                            .foregroundColor(.textSecondary)
+
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.errorRed.opacity(0.15))
+                                    .frame(width: 40, height: 40)
+
+                                Image(systemName: "person.fill.xmark")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.errorRed)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(report.reportedName)
+                                    .font(AppFont.subheadline())
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.textPrimary)
+
+                                Text(report.reportedEmail)
                                     .font(AppFont.caption())
                                     .foregroundColor(.textSecondary)
                             }
                         }
+                    }
+                    .padding(16)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
 
-                        // Category
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Kategori")
-                                .font(AppFont.subheadline())
-                                .foregroundColor(.textPrimary.opacity(0.6))
+                    // Category & Reason
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Kategori")
+                            .font(AppFont.caption())
+                            .foregroundColor(.textSecondary)
 
-                            HStack(spacing: 8) {
-                                Image(systemName: report.category.icon)
-                                Text(report.category.displayName)
-                            }
+                        Text(report.category.displayName)
+                            .font(AppFont.subheadline())
+                            .fontWeight(.semibold)
+                            .foregroundColor(.textPrimary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Alasan Laporan")
+                            .font(AppFont.caption())
+                            .foregroundColor(.textSecondary)
+
+                        Text(report.reason)
                             .font(AppFont.subheadline())
                             .foregroundColor(.textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.textPrimary.opacity(0.06))
-                            .clipShape(Capsule())
-                        }
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-                        // Reason
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Alasan")
-                                .font(AppFont.subheadline())
-                                .foregroundColor(.textPrimary.opacity(0.6))
+                    // Admin Notes
+                    if report.status == .pending {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Catatan Admin (Opsional)")
+                                .font(AppFont.caption())
+                                .foregroundColor(.textSecondary)
 
-                            Text(report.reason)
+                            TextEditor(text: $adminNotes)
+                                .frame(height: 100)
+                                .scrollContentBackground(.hidden)
                                 .font(AppFont.subheadline())
                                 .foregroundColor(.textPrimary)
                                 .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Color.cardFallback)
                                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                        }
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppRadius.md)
+                                        .stroke(Color.borderSoft, lineWidth: 1)
+                                )
 
-                        // Date
-                        HStack {
-                            Text("Tanggal Laporan:")
-                                .font(AppFont.caption())
-                                .foregroundColor(.textSecondary)
-                            Text(formatDate(report.createdAt.dateValue()))
-                                .font(AppFont.caption())
-                                .foregroundColor(.textPrimary)
-                        }
-
-                        // Admin Notes (if resolved)
-                        if let notes = report.adminNotes, !notes.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Catatan Admin")
-                                    .font(AppFont.subheadline())
-                                    .foregroundColor(.textPrimary.opacity(0.6))
-
-                                Text(notes)
+                            Toggle(isOn: $suspendUserOnResolve) {
+                                Text("Suspend pengguna yang dilaporkan")
                                     .font(AppFont.caption())
                                     .foregroundColor(.textPrimary)
-                                    .padding(12)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(hex: "#7C3AED").opacity(0.08))
+                            }
+                            .tint(.errorRed)
+                        }
+
+                        // Action Buttons
+                        HStack(spacing: 12) {
+                            Button {
+                                showDismissAlert = true
+                            } label: {
+                                Text("Tolak Laporan")
+                                    .font(AppFont.subheadline())
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.textSecondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(Color.textSecondary.opacity(0.1))
+                                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                            }
+
+                            Button {
+                                showResolveAlert = true
+                            } label: {
+                                Text("Selesaikan")
+                                    .font(AppFont.subheadline())
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(LinearGradient.brandGradient)
                                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                             }
                         }
+                    } else if let notes = report.adminNotes {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Catatan Admin")
+                                .font(AppFont.caption())
+                                .foregroundColor(.textSecondary)
 
-                        // Actions (only if pending or reviewed)
-                        if report.status == .pending || report.status == .reviewed {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Catatan Admin (Opsional)")
-                                    .font(AppFont.subheadline())
-                                    .foregroundColor(.textPrimary.opacity(0.6))
-
-                                TextEditor(text: $adminNotes)
-                                    .frame(height: 80)
-                                    .scrollContentBackground(.hidden)
-                                    .font(AppFont.subheadline())
-                                    .padding(12)
-                                    .background(Color.cardFallback)
-                                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: AppRadius.md)
-                                            .stroke(Color.borderSoft, lineWidth: 1)
-                                    )
-
-                                Toggle("Suspend pengguna yang dilaporkan", isOn: $suspendUserOnResolve)
-                                    .font(AppFont.subheadline())
-                                    .tint(.errorRed)
-
-                                HStack(spacing: 12) {
-                                    Button {
-                                        showDismissAlert = true
-                                    } label: {
-                                        Text("Tolak")
-                                            .font(AppFont.subheadline())
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.textPrimary.opacity(0.7))
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 14)
-                                            .background(Color.textPrimary.opacity(0.1))
-                                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                                    }
-
-                                    Button {
-                                        showResolveAlert = true
-                                    } label: {
-                                        Text("Selesaikan")
-                                            .font(AppFont.subheadline())
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.white)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 14)
-                                            .background(
-                                                LinearGradient(
-                                                    colors: [Color(hex: "#7C3AED"), Color(hex: "#5B21B6")],
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
-                                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                                    }
-                                }
-                            }
-                            .padding(.top, 8)
+                            Text(notes)
+                                .font(AppFont.subheadline())
+                                .foregroundColor(.textPrimary)
                         }
                     }
-                    .padding(20)
                 }
-                .dismissKeyboardOnTap()
+                .padding(20)
             }
+            .background(Color.baseFallback)
             .navigationTitle("Detail Laporan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Tutup") {
-                        dismiss()
-                    }
+                    Button("Tutup") { dismiss() }
                 }
             }
             .alert("Selesaikan Laporan", isPresented: $showResolveAlert) {
@@ -991,6 +1047,7 @@ struct ReportDetailSheet: View {
                     Text("Laporan akan diselesaikan tanpa suspend akun pengguna.")
                 }
             }
+            .tint(.brandPrimary)
             .alert("Tolak Laporan", isPresented: $showDismissAlert) {
                 Button("Batal", role: .cancel) { }
                 Button("Tolak") {
@@ -1006,14 +1063,7 @@ struct ReportDetailSheet: View {
             } message: {
                 Text("Laporan akan ditolak dan tidak ada tindakan yang diambil terhadap pengguna yang dilaporkan.")
             }
+            .tint(.brandPrimary)
         }
-    }
-
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        formatter.timeStyle = .short
-        formatter.locale = Locale(identifier: "id_ID")
-        return formatter.string(from: date)
     }
 }

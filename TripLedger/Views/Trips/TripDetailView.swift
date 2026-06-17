@@ -2,6 +2,11 @@ import SwiftUI
 import FirebaseCore
 import FirebaseFirestore
 
+enum ReportType {
+    case tripSummary
+    case personalExpense
+}
+
 struct TripDetailView: View {
     let trip: TripModel
 
@@ -14,8 +19,11 @@ struct TripDetailView: View {
     @State private var currentTrip: TripModel
     @State private var tripListener: ListenerRegistration?
 
-    @State private var showSettlement  = false
-    @State private var showReport      = false
+    @State private var showReportPreview = false
+    @State private var showSelectReportSheet = false
+    @State private var selectedReportType: ReportType?
+    @State private var reportPDFURL: URL?
+    @State private var reportTitle = ""
     @State private var showDeleteAlert = false
     @State private var showLeaveAlert  = false
     @State private var showFinishAlert = false
@@ -95,8 +103,8 @@ struct TripDetailView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
 
-            // FAB — only on Expenses tab
-            if selectedTab == 1 && currentTrip.isActive {
+            // FAB — only on Expenses tab and trip is not finished/deleted
+            if selectedTab == 1 && (currentTrip.status == .planned || currentTrip.status == .active) {
                 Button {
                     isAddingExpense = true
                 } label: {
@@ -127,14 +135,14 @@ struct TripDetailView: View {
                             Label("Edit Trip", systemImage: "pencil")
                         }
                     }
-                    Button { showReport = true } label: {
+
+                    // Laporan - Opens sheet
+                    Button {
+                        showSelectReportSheet = true
+                    } label: {
                         Label("Laporan", systemImage: "chart.bar.fill")
                     }
-                    if currentTrip.isActive {
-                        Button { showSettlement = true } label: {
-                            Label("Settlement", systemImage: "banknote.fill")
-                        }
-                    }
+
                     Divider()
                     if isOwner {
                         Button(role: .destructive) {
@@ -163,14 +171,24 @@ struct TripDetailView: View {
         .onDisappear {
             tripListener?.remove()
         }
-        .sheet(isPresented: $showSettlement) {
-            SettlementView(trip: currentTrip)
-                .environmentObject(authVM)
-                .environmentObject(expenseVM)
+        .fullScreenCover(isPresented: $showReportPreview) {
+            if let url = reportPDFURL {
+                PDFPreviewView(pdfURL: url, title: reportTitle)
+            }
         }
-        .sheet(isPresented: $showReport) {
-            ReportView(trip: currentTrip)
-                .environmentObject(expenseVM)
+        .sheet(isPresented: $showSelectReportSheet) {
+            SelectReportTypeSheet(
+                onSelectTripSummary: {
+                    selectedReportType = .tripSummary
+                    generateReport()
+                },
+                onSelectPersonalExpense: {
+                    selectedReportType = .personalExpense
+                    generateReport()
+                }
+            )
+            .presentationDetents([.height(350)])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showEditTrip) {
             EditTripView(trip: currentTrip)
@@ -224,6 +242,7 @@ struct TripDetailView: View {
         } message: {
             Text(finishAlertMessage)
         }
+        .tint(.brandPrimary)
         .alert("Selamat! 🎉", isPresented: $showFinishSuccess) {
             Button("OK") {
                 dismiss()
@@ -231,6 +250,7 @@ struct TripDetailView: View {
         } message: {
             Text("Trip \"\(currentTrip.name)\" sudah selesai. Terima kasih sudah berpetualang bersama!")
         }
+        .tint(.brandPrimary)
     }
 
     // MARK: - Native Segmented Picker
@@ -601,6 +621,47 @@ struct TripDetailView: View {
         formatter.locale = Locale(identifier: "id_ID")
         formatter.dateFormat = "EEEE, d MMMM yyyy" // "Rabu, 25 Juli 2026"
         return formatter.string(from: date)
+    }
+
+    // MARK: - Generate Report
+    private func generateReport() {
+        guard let reportType = selectedReportType,
+              let currentUserUID = authVM.currentUser?.uid,
+              let currentUserName = authVM.currentUser?.displayName else {
+            print("❌ Missing data for report generation")
+            return
+        }
+
+        // Generate PDF based on report type
+        let pdfURL: URL?
+        let title: String
+
+        switch reportType {
+        case .tripSummary:
+            pdfURL = TripReportGenerator.generateTripSummaryReport(
+                trip: currentTrip,
+                expenses: expenseVM.expenses
+            )
+            title = "Laporan Ringkasan Trip"
+
+        case .personalExpense:
+            pdfURL = TripReportGenerator.generatePersonalExpenseReport(
+                trip: currentTrip,
+                expenses: expenseVM.expenses,
+                currentUserUID: currentUserUID,
+                currentUserName: currentUserName
+            )
+            title = "Laporan Pengeluaran Pribadi"
+        }
+
+        if let url = pdfURL {
+            reportPDFURL = url
+            reportTitle = title
+            showReportPreview = true
+            print("✅ Report PDF generated: \(url.lastPathComponent)")
+        } else {
+            print("❌ Failed to generate report PDF")
+        }
     }
 
     private func emptyState(icon: String, text: String, sub: String) -> some View {

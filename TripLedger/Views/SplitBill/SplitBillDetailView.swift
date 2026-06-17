@@ -9,7 +9,7 @@ struct SplitBillDetailView: View {
     
     @State private var showDeleteAlert = false
     @State private var isEditing = false
-    @State private var showShareSheet = false
+    @State private var showPDFPreview = false
     @State private var showFullScreenReceipt = false
     @State private var pdfURL: URL?
     
@@ -254,9 +254,9 @@ struct SplitBillDetailView: View {
                 self.bill = updated
             }
         }
-        .sheet(isPresented: $showShareSheet) {
+        .fullScreenCover(isPresented: $showPDFPreview) {
             if let url = pdfURL {
-                ShareSheet(items: [url])
+                PDFPreviewView(pdfURL: url, title: "Tagihan - \(bill.title)")
             }
         }
     }
@@ -266,7 +266,7 @@ struct SplitBillDetailView: View {
         // Generate PDF using PDFGenerator
         if let url = PDFGenerator.generateSplitBillPDF(bill: bill) {
             pdfURL = url
-            showShareSheet = true
+            showPDFPreview = true
         } else {
             print("❌ Failed to generate PDF")
         }

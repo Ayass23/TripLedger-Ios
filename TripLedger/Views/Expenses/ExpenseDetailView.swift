@@ -11,7 +11,7 @@ struct ExpenseDetailView: View {
     @State private var showDeleteAlert = false
     @State private var isEditing = false
     @State private var showFullScreenReceipt = false
-    @State private var showShareSheet = false
+    @State private var showPDFPreview = false
     @State private var pdfURL: URL?
 
     private var isOwner: Bool {
@@ -229,9 +229,9 @@ struct ExpenseDetailView: View {
                 }
             }
         }
-        .sheet(isPresented: $showShareSheet) {
+        .fullScreenCover(isPresented: $showPDFPreview) {
             if let url = pdfURL {
-                ShareSheet(items: [url])
+                PDFPreviewView(pdfURL: url, title: "Pengeluaran - \(expense.title)")
             }
         }
         .fullScreenCover(isPresented: $showFullScreenReceipt) {
@@ -287,7 +287,7 @@ struct ExpenseDetailView: View {
             isFullySettled: isFullySettled
         ) {
             pdfURL = url
-            showShareSheet = true
+            showPDFPreview = true
         } else {
             print("❌ Failed to generate PDF")
         }

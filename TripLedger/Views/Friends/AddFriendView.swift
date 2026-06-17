@@ -114,6 +114,7 @@ struct AddFriendView: View {
             } message: {
                 Text(successMessage)
             }
+            .tint(.brandPrimary)
             .onChange(of: searchQuery) { newValue in
                 if !newValue.isEmpty {
                     Task {

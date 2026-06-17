@@ -597,6 +597,7 @@ struct NotificationDetailSheet: View {
         } message: {
             Text(alertMessage)
         }
+        .tint(.brandPrimary)
     }
 }
 
