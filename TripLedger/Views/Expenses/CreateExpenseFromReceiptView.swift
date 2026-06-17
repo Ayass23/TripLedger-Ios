@@ -251,7 +251,7 @@ struct CreateExpenseFromReceiptView: View {
             // Init Participants from trip members
             if participants.isEmpty {
                 participants = trip.members.map { member in
-                    ParticipantEntry(id: member.uid, uid: member.uid, name: member.displayName, isSelected: true)
+                    ParticipantEntry(id: UUID().uuidString, uid: member.uid, name: member.displayName, isSelected: true)
                 }
                 // Set default payer to current user, or first participant if current user not found
                 if let currentUser = authVM.currentUser {

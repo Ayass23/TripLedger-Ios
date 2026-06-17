@@ -317,12 +317,16 @@ struct AddParticipantView: View {
                 participants.append(entry)
             }
         } else {
-            // Add selected friends
+            // Add selected friends (skip duplicates)
             let selectedFriendModels = friendsVM.friends.filter { selectedFriends.contains($0.uid) }
+            let existingUIDs = Set(participants.compactMap { $0.uid })
 
             for friend in selectedFriendModels {
+                // Skip if already exists
+                guard !existingUIDs.contains(friend.uid) else { continue }
+
                 let entry = ParticipantEntry(
-                    id: friend.uid,
+                    id: UUID().uuidString,
                     uid: friend.uid,
                     name: friend.displayName,
                     isSelected: true

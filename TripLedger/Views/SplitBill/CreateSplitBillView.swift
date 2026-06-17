@@ -325,7 +325,7 @@ struct CreateSplitBillView: View {
             }
 
             if participants.isEmpty, let user = authVM.currentUser {
-                let currentUserParticipant = ParticipantEntry(id: user.uid, uid: user.uid, name: user.displayName, isSelected: true)
+                let currentUserParticipant = ParticipantEntry(id: UUID().uuidString, uid: user.uid, name: user.displayName, isSelected: true)
                 participants.append(currentUserParticipant)
                 paidByParticipant = currentUserParticipant  // Default: current user is the payer
                 print("👤 [CreateSplitBillView] Added current user as participant: \(user.displayName)")
@@ -1352,7 +1352,7 @@ struct CreateSplitBillView: View {
             }
 
             return SplitBillParticipant(
-                id: entry.id,
+                id: UUID().uuidString,
                 uid: entry.uid,
                 displayName: entry.name,
                 amount: calculatedAmount,
