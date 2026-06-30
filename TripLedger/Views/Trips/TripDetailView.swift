@@ -13,6 +13,7 @@ struct TripDetailView: View {
     @EnvironmentObject private var authVM:    AuthViewModel
     @EnvironmentObject private var tripVM:    TripViewModel
     @StateObject private var expenseVM = ExpenseViewModel()
+    @StateObject private var settlementVM = SettlementViewModel()
     @Environment(\.dismiss) private var dismiss
 
     // Real-time trip data
@@ -28,12 +29,29 @@ struct TripDetailView: View {
     @State private var showLeaveAlert  = false
     @State private var showFinishAlert = false
     @State private var showFinishSuccess = false
+    @State private var showUnpaidExpensesAlert = false
+    @State private var showMemberHasDebtAlert = false
+    @State private var showTransferOwnerSheet = false
+    @State private var showTransferSuccessAlert = false
+    @State private var newOwnerName = ""
+    @State private var showCannotLeaveAlert = false
     @State private var showInvite      = false
     @State private var showKickAlert   = false
     @State private var showEditTrip    = false
     @State private var memberToKick:   TripMember?
     @State private var selectedTab     = 0
     @State private var isAddingExpense = false
+    @State private var suspendedMemberUIDs: Set<String> = []
+    @State private var expenseSearchText = ""
+    @State private var selectedCategory: ExpenseCategory? = nil
+
+    // Settlement states
+    @State private var showFinancialDetail = false
+    @State private var showPaymentSheet = false
+    @State private var showVerifySheet = false
+    @State private var selectedBalance: UserBalance?
+    @State private var selectedSettlement: Settlement?
+    @State private var userBalances: [UserBalance] = []
 
     init(trip: TripModel) {
         self.trip = trip
@@ -74,6 +92,49 @@ struct TripDetailView: View {
         return tripEnd < today
     }
 
+    private var hasUnpaidExpenses: Bool {
+        expenseVM.expenses.contains { expense in
+            expense.splits.contains { $0.isPaid != true }
+        }
+    }
+
+    private var unpaidExpensesCount: Int {
+        expenseVM.expenses.filter { expense in
+            expense.splits.contains { $0.isPaid != true }
+        }.count
+    }
+
+    /// Check if a member has unpaid debts (owes money to others)
+    private func memberHasDebt(_ memberUID: String) -> Bool {
+        for expense in expenseVM.expenses {
+            // Check if member has unpaid splits (they owe money)
+            let hasUnpaidSplit = expense.splits.contains { split in
+                split.uid == memberUID && split.isPaid != true
+            }
+            if hasUnpaidSplit { return true }
+        }
+        return false
+    }
+
+    /// Check if a member has unpaid receivables (others owe them money)
+    private func memberHasReceivables(_ memberUID: String) -> Bool {
+        for expense in expenseVM.expenses {
+            // If member is the payer, check if others haven't paid
+            if expense.paidByUID == memberUID {
+                let hasUnpaidFromOthers = expense.splits.contains { split in
+                    split.uid != memberUID && split.isPaid != true
+                }
+                if hasUnpaidFromOthers { return true }
+            }
+        }
+        return false
+    }
+
+    /// Check if a member has any outstanding balance (debt or receivables)
+    private func memberHasOutstandingBalance(_ memberUID: String) -> Bool {
+        return memberHasDebt(memberUID) || memberHasReceivables(memberUID)
+    }
+
     private var finishAlertMessage: String {
         if tripHasEnded {
             return "Trip \"\(currentTrip.name)\" akan ditandai sebagai selesai. Kamu masih bisa melihat riwayat trip ini."
@@ -88,12 +149,12 @@ struct TripDetailView: View {
         }
     }
 
-    var body: some View {
+    // MARK: - Main Content
+    private var mainContent: some View {
         ZStack(alignment: .bottomTrailing) {
             Color.baseFallback.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Custom segmented picker
                 pickerSection
 
                 TabView(selection: $selectedTab) {
@@ -103,161 +164,267 @@ struct TripDetailView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
 
-            // FAB — only on Expenses tab and trip is not finished/deleted
-            if selectedTab == 1 && (currentTrip.status == .planned || currentTrip.status == .active) {
-                Button {
-                    isAddingExpense = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 58, height: 58)
-                        .background(LinearGradient.brandGradient)
-                        .clipShape(Circle())
-                        .shadow(color: Color.primaryFallback.opacity(0.45), radius: 12)
-                }
-                .navigationDestination(isPresented: $isAddingExpense) {
-                    AddExpenseMethodView(trip: currentTrip, isAddingExpense: $isAddingExpense)
-                        .environmentObject(authVM)
-                        .environmentObject(expenseVM)
-                }
-                .padding(.trailing, 20)
-                .padding(.bottom, 24)
-            }
+            fabButton
         }
-        .navigationTitle("Detail Trip")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    if isOwner || isAdmin {
-                        Button { showEditTrip = true } label: {
-                            Label("Edit Trip", systemImage: "pencil")
-                        }
-                    }
+    }
 
-                    // Laporan - Opens sheet
-                    Button {
-                        showSelectReportSheet = true
-                    } label: {
-                        Label("Laporan", systemImage: "chart.bar.fill")
-                    }
+    // MARK: - FAB Button
+    @ViewBuilder
+    private var fabButton: some View {
+        if selectedTab == 1 && (currentTrip.status == .planned || currentTrip.status == .active) {
+            Button {
+                isAddingExpense = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 58, height: 58)
+                    .background(LinearGradient.brandGradient)
+                    .clipShape(Circle())
+                    .shadow(color: Color.primaryFallback.opacity(0.45), radius: 12)
+            }
+            .navigationDestination(isPresented: $isAddingExpense) {
+                AddExpenseMethodView(trip: currentTrip, isAddingExpense: $isAddingExpense)
+                    .environmentObject(authVM)
+                    .environmentObject(expenseVM)
+            }
+            .padding(.trailing, 20)
+            .padding(.bottom, 24)
+        }
+    }
 
-                    Divider()
-                    if isOwner {
-                        Button(role: .destructive) {
-                            showDeleteAlert = true
-                        } label: {
-                            Label("Hapus Trip", systemImage: "trash.fill")
-                        }
-                    } else {
-                        Button(role: .destructive) {
-                            showLeaveAlert = true
-                        } label: {
-                            Label("Keluar Trip", systemImage: "rectangle.portrait.and.arrow.right.fill")
-                        }
+    var body: some View {
+        mainContent
+            .modifier(AlertModifiers(
+                showDeleteAlert: $showDeleteAlert,
+                showLeaveAlert: $showLeaveAlert,
+                showKickAlert: $showKickAlert,
+                showFinishAlert: $showFinishAlert,
+                showFinishSuccess: $showFinishSuccess,
+                memberToKick: $memberToKick,
+                currentTripName: currentTrip.name,
+                finishAlertMessage: finishAlertMessage,
+                onDelete: {
+                    Task {
+                        guard let tripID = trip.id, !tripID.isEmpty else { return }
+                        await tripVM.deleteTrip(tripID: tripID)
+                        dismiss()
                     }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.textPrimary.opacity(0.7))
-                }
-            }
-        }
-        .onAppear {
-            expenseVM.listenExpenses(tripID: trip.id ?? "")
-            listenToTripUpdates()
-        }
-        .onDisappear {
-            tripListener?.remove()
-        }
-        .fullScreenCover(isPresented: $showReportPreview) {
-            if let url = reportPDFURL {
-                PDFPreviewView(pdfURL: url, title: reportTitle)
-            }
-        }
-        .sheet(isPresented: $showSelectReportSheet) {
-            SelectReportTypeSheet(
-                onSelectTripSummary: {
-                    selectedReportType = .tripSummary
-                    generateReport()
                 },
-                onSelectPersonalExpense: {
-                    selectedReportType = .personalExpense
-                    generateReport()
+                onLeave: {
+                    Task {
+                        guard let tripID = trip.id, let uid = authVM.currentUser?.uid else { return }
+                        await tripVM.leaveTrip(tripID: tripID, uid: uid)
+                        dismiss()
+                    }
+                },
+                onKick: {
+                    guard let member = memberToKick, let tripID = trip.id else { return }
+                    let uid = member.uid
+                    let kicker = authVM.currentUser
+                    Task { await tripVM.kickMember(tripID: tripID, memberUID: uid, kickedBy: kicker) }
+                    memberToKick = nil
+                },
+                onFinish: {
+                    Task {
+                        guard let tripID = currentTrip.id else { return }
+                        await tripVM.finishTrip(tripID: tripID, trip: currentTrip, currentUser: authVM.currentUser)
+                        showFinishSuccess = true
+                    }
+                },
+                onFinishSuccessOK: { dismiss() }
+            ))
+            .alert("Masih Ada Expense Belum Lunas", isPresented: $showUnpaidExpensesAlert) {
+                Button("Batal", role: .cancel) {}
+                Button("Tetap Selesaikan", role: .destructive) {
+                    showFinishAlert = true
                 }
-            )
-            .presentationDetents([.height(350)])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showEditTrip) {
-            EditTripView(trip: currentTrip)
-                .environmentObject(authVM)
-                .environmentObject(tripVM)
-        }
-        .alert("Hapus Trip?", isPresented: $showDeleteAlert) {
-            Button("Batal", role: .cancel) {}
-            Button("Hapus", role: .destructive) {
-                Task {
-                    guard let tripID = trip.id, !tripID.isEmpty else { return }
-                    await tripVM.deleteTrip(tripID: tripID)
-                    dismiss()
-                }
+            } message: {
+                Text("Terdapat \(unpaidExpensesCount) expense yang masih memiliki pembayaran belum lunas. Apakah kamu yakin ingin menyelesaikan trip ini?")
             }
-        } message: {
-            Text("Trip \"\(currentTrip.name)\" akan dihapus secara permanen. Tindakan ini tidak bisa dibatalkan.")
-        }
-        .alert("Keluar dari Trip?", isPresented: $showLeaveAlert) {
-            Button("Batal", role: .cancel) {}
-            Button("Keluar", role: .destructive) {
-                Task {
-                    guard let tripID = trip.id, let uid = authVM.currentUser?.uid else { return }
-                    await tripVM.leaveTrip(tripID: tripID, uid: uid)
-                    dismiss()
-                }
-            }
-        } message: {
-            Text("Anda akan keluar dari trip \"\(currentTrip.name)\" dan tidak bisa mengaksesnya lagi kecuali diundang kembali.")
-        }
-        .alert("Keluarkan Anggota?", isPresented: $showKickAlert) {
-            Button("Batal", role: .cancel) { memberToKick = nil }
-            Button("Keluarkan", role: .destructive) {
-                if let member = memberToKick, let tripID = trip.id {
-                    Task { await tripVM.kickMember(tripID: tripID, memberUID: member.uid) }
+            .alert("Tidak Dapat Menghapus Anggota", isPresented: $showMemberHasDebtAlert) {
+                Button("OK", role: .cancel) {
                     memberToKick = nil
                 }
-            }
-        } message: {
-            Text("Anggota \"\(memberToKick?.displayName ?? "")\" akan dikeluarkan dari trip ini.")
-        }
-        .alert("Selesaikan Trip?", isPresented: $showFinishAlert) {
-            Button("Batal", role: .cancel) {}
-            Button("Selesaikan") {
-                Task {
-                    guard let tripID = currentTrip.id else { return }
-                    await tripVM.finishTrip(tripID: tripID, trip: currentTrip, currentUser: authVM.currentUser)
-                    showFinishSuccess = true
+            } message: {
+                if let member = memberToKick {
+                    let hasDebt = memberHasDebt(member.uid)
+                    let hasReceivables = memberHasReceivables(member.uid)
+                    if hasDebt && hasReceivables {
+                        Text("\(member.displayName) masih memiliki hutang dan piutang yang belum diselesaikan. Selesaikan semua transaksi terlebih dahulu.")
+                    } else if hasDebt {
+                        Text("\(member.displayName) masih memiliki hutang yang belum dibayar. Selesaikan pembayaran terlebih dahulu.")
+                    } else {
+                        Text("\(member.displayName) masih memiliki piutang yang belum diterima. Selesaikan semua transaksi terlebih dahulu.")
+                    }
+                } else {
+                    Text("Anggota masih memiliki transaksi yang belum diselesaikan.")
                 }
             }
-        } message: {
-            Text(finishAlertMessage)
-        }
-        .tint(.brandPrimary)
-        .alert("Selamat! 🎉", isPresented: $showFinishSuccess) {
-            Button("OK") {
-                dismiss()
+            .modifier(NavigationDestinationsModifier(
+                showFinancialDetail: $showFinancialDetail,
+                showPaymentSheet: $showPaymentSheet,
+                showVerifySheet: $showVerifySheet,
+                userBalances: userBalances,
+                currentTrip: currentTrip,
+                trip: trip,
+                authVM: authVM,
+                settlementVM: settlementVM,
+                selectedBalance: $selectedBalance,
+                selectedSettlement: $selectedSettlement
+            ))
+            .navigationTitle("Detail Trip")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
+            .onAppear {
+                expenseVM.listenExpenses(tripID: trip.id ?? "")
+                listenToTripUpdates()
+                Task { await loadSuspendedMembers() }
+                if let uid = authVM.currentUser?.uid, let tripID = trip.id {
+                    settlementVM.listenPendingSettlements(tripID: tripID, userUID: uid)
+                }
             }
-        } message: {
-            Text("Trip \"\(currentTrip.name)\" sudah selesai. Terima kasih sudah berpetualang bersama!")
+            .onChange(of: expenseVM.expenses) { _, _ in recalculateBalances() }
+            .onDisappear { tripListener?.remove() }
+            .fullScreenCover(isPresented: $showReportPreview) { reportPreviewContent }
+            .sheet(isPresented: $showSelectReportSheet) { selectReportSheetContent }
+            .sheet(isPresented: $showEditTrip) { editTripContent }
+            .sheet(isPresented: $showVerifySheet) { verifySheetContent }
+            .sheet(isPresented: $showTransferOwnerSheet) {
+                TransferOwnerSheet(
+                    isPresented: $showTransferOwnerSheet,
+                    trip: currentTrip,
+                    suspendedMemberUIDs: suspendedMemberUIDs,
+                    onTransfer: { newOwnerUID, newOwnerDisplayName in
+                        Task {
+                            guard let tripID = currentTrip.id else { return }
+                            await tripVM.transferOwnership(tripID: tripID, newOwnerUID: newOwnerUID)
+                            newOwnerName = newOwnerDisplayName
+                            showTransferSuccessAlert = true
+                        }
+                    }
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+            .alert("Kepemilikan Dialihkan! 🎉", isPresented: $showTransferSuccessAlert) {
+                Button("OK") { }
+            } message: {
+                Text("\(newOwnerName) sekarang menjadi owner trip ini. Kamu sekarang menjadi member biasa.")
+            }
+            .alert("Tidak Dapat Keluar Trip", isPresented: $showCannotLeaveAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                if let uid = authVM.currentUser?.uid {
+                    let hasDebt = memberHasDebt(uid)
+                    let hasReceivables = memberHasReceivables(uid)
+                    if hasDebt && hasReceivables {
+                        Text("Kamu masih memiliki hutang dan piutang yang belum diselesaikan. Selesaikan semua transaksi terlebih dahulu sebelum keluar dari trip.")
+                    } else if hasDebt {
+                        Text("Kamu masih memiliki hutang yang belum dibayar. Selesaikan pembayaran terlebih dahulu sebelum keluar dari trip.")
+                    } else {
+                        Text("Kamu masih memiliki piutang yang belum diterima. Selesaikan semua transaksi terlebih dahulu sebelum keluar dari trip.")
+                    }
+                } else {
+                    Text("Kamu masih memiliki transaksi yang belum diselesaikan.")
+                }
+            }
+            .tint(.brandPrimary)
+    }
+
+    // MARK: - Toolbar Content
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Menu {
+                if isOwner || isAdmin {
+                    Button { showEditTrip = true } label: {
+                        Label("Edit Trip", systemImage: "pencil")
+                    }
+                }
+                Button {
+                    showSelectReportSheet = true
+                } label: {
+                    Label("Laporan", systemImage: "chart.bar.fill")
+                }
+                if isOwner && currentTrip.members.count > 1 {
+                    Button { showTransferOwnerSheet = true } label: {
+                        Label("Alihkan Kepemilikan", systemImage: "crown.fill")
+                    }
+                }
+                Divider()
+                if isOwner {
+                    Button(role: .destructive) { showDeleteAlert = true } label: {
+                        Label("Hapus Trip", systemImage: "trash.fill")
+                    }
+                } else {
+                    Button(role: .destructive) {
+                        // Check if current user has outstanding balance before allowing leave
+                        if let uid = authVM.currentUser?.uid, memberHasOutstandingBalance(uid) {
+                            showCannotLeaveAlert = true
+                        } else {
+                            showLeaveAlert = true
+                        }
+                    } label: {
+                        Label("Keluar Trip", systemImage: "rectangle.portrait.and.arrow.right.fill")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.textPrimary.opacity(0.7))
+            }
         }
-        .tint(.brandPrimary)
+    }
+
+
+    // MARK: - Sheet Contents
+    private var editTripContent: some View {
+        EditTripView(trip: currentTrip)
+            .environmentObject(authVM)
+            .environmentObject(tripVM)
+    }
+
+    private var selectReportSheetContent: some View {
+        SelectReportTypeSheet(
+            onSelectTripSummary: {
+                selectedReportType = .tripSummary
+                generateReport()
+            },
+            onSelectPersonalExpense: {
+                selectedReportType = .personalExpense
+                generateReport()
+            }
+        )
+        .presentationDetents([.height(350)])
+        .presentationDragIndicator(.visible)
+    }
+
+    @ViewBuilder
+    private var verifySheetContent: some View {
+        if let settlement = selectedSettlement {
+            SettlementVerifySheet(
+                isPresented: $showVerifySheet,
+                settlementVM: settlementVM,
+                expenseVM: expenseVM,
+                settlement: settlement
+            )
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    @ViewBuilder
+    private var reportPreviewContent: some View {
+        if let url = reportPDFURL {
+            PDFPreviewView(pdfURL: url, title: reportTitle)
+        }
     }
 
     // MARK: - Native Segmented Picker
     private var pickerSection: some View {
         Picker("Menu", selection: $selectedTab) {
-            Text("Details").tag(0)
-            Text("Expenses").tag(1)
+            Text("Detail").tag(0)
+            Text("Pengeluaran").tag(1)
         }
         .pickerStyle(.segmented)
         .padding(.horizontal, 16)
@@ -293,6 +460,37 @@ struct TripDetailView: View {
     }
 
     // MARK: - Helper Functions
+    private func recalculateBalances() {
+        guard let uid = authVM.currentUser?.uid else { return }
+        userBalances = settlementVM.calculateBalances(
+            expenses: expenseVM.expenses,
+            members: currentTrip.members,
+            currentUID: uid
+        )
+    }
+
+    private func loadSuspendedMembers() async {
+        let memberUIDs = currentTrip.memberUIDs
+        guard !memberUIDs.isEmpty else { return }
+
+        do {
+            let db = FirestoreService.shared.db
+            let snapshot = try await db.collection(Collection.users)
+                .whereField("uid", in: memberUIDs)
+                .getDocuments()
+
+            let suspended = snapshot.documents.compactMap { doc -> String? in
+                guard let user = try? doc.data(as: UserModel.self),
+                      user.isSuspended else { return nil }
+                return user.uid
+            }
+
+            suspendedMemberUIDs = Set(suspended)
+        } catch {
+            print("Error loading suspended members: \(error)")
+        }
+    }
+
     private func listenToTripUpdates() {
         guard let tripID = trip.id else { return }
         let db = FirestoreService.shared.db
@@ -450,8 +648,8 @@ struct TripDetailView: View {
                     .foregroundColor(.textPrimary)
                 Spacer()
 
-                // Add member button (owner/admin only)
-                if (isOwner || isAdmin) && trip.isActive {
+                // Add member button (owner/admin only, for planned or active trips)
+                if (isOwner || isAdmin) && (trip.status == .planned || trip.status == .active) {
                     Button { showInvite = true } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "person.badge.plus")
@@ -471,20 +669,39 @@ struct TripDetailView: View {
                 }
             }
 
-            ForEach(trip.members) { member in
+            ForEach(currentTrip.members) { member in
+                let isSuspended = suspendedMemberUIDs.contains(member.uid)
                 HStack(spacing: 14) {
-                    AvatarView(url: member.avatarURL, initials: String(member.displayName.prefix(2)).uppercased(), size: 42)
+                    ZStack(alignment: .bottomTrailing) {
+                        AvatarView(url: member.avatarURL, initials: String(member.displayName.prefix(2)).uppercased(), size: 42)
+                            .opacity(isSuspended ? 0.5 : 1.0)
+
+                        if isSuspended {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.errorRed)
+                                .background(Circle().fill(Color.cardFallback).frame(width: 16, height: 16))
+                        }
+                    }
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(member.displayName)
                                 .font(AppFont.subheadline())
-                                .foregroundColor(.textPrimary)
+                                .foregroundColor(isSuspended ? .textPrimary.opacity(0.5) : .textPrimary)
                             if member.uid == authVM.currentUser?.uid {
                                 Text("Kamu")
                                     .font(AppFont.caption2())
                                     .foregroundColor(Color.accentFallback)
                                     .padding(.horizontal, 6).padding(.vertical, 2)
                                     .background(Color.accentFallback.opacity(0.15))
+                                    .clipShape(Capsule())
+                            }
+                            if isSuspended {
+                                Text("Ditangguhkan")
+                                    .font(AppFont.caption2())
+                                    .foregroundColor(.errorRed)
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(Color.errorRed.opacity(0.15))
                                     .clipShape(Capsule())
                             }
                         }
@@ -498,10 +715,15 @@ struct TripDetailView: View {
                     roleBadge(member.role)
 
                     // Delete button (owner only, cannot delete self)
-                    if isOwner && member.uid != authVM.currentUser?.uid && trip.isActive {
+                    if isOwner && member.uid != authVM.currentUser?.uid && currentTrip.isActive {
                         Button {
                             memberToKick = member
-                            showKickAlert = true
+                            // Check if member has outstanding balance before allowing kick
+                            if memberHasOutstandingBalance(member.uid) {
+                                showMemberHasDebtAlert = true
+                            } else {
+                                showKickAlert = true
+                            }
                         } label: {
                             Image(systemName: "minus.circle.fill")
                                 .font(.system(size: 18))
@@ -520,7 +742,11 @@ struct TripDetailView: View {
     // MARK: - Finish Trip Button
     private var finishTripButton: some View {
         Button {
-            showFinishAlert = true
+            if hasUnpaidExpenses {
+                showUnpaidExpensesAlert = true
+            } else {
+                showFinishAlert = true
+            }
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "flag.pattern.checkered")
@@ -571,45 +797,206 @@ struct TripDetailView: View {
             .environmentObject(tripVM)
     }
 
+    // MARK: - Financial Summary Card View
+    @ViewBuilder
+    private var financialSummaryCardView: some View {
+        FinancialSummaryCard(
+            balances: userBalances,
+            pendingSettlements: settlementVM.pendingSettlements,
+            myPendingSettlements: settlementVM.myPendingSettlements,
+            currency: currentTrip.currency,
+            onShowDetail: { showFinancialDetail = true },
+            onVerifySettlement: { settlement in
+                selectedSettlement = settlement
+                showVerifySheet = true
+            }
+        )
+    }
+
     // MARK: - Expenses Tab
     private var expensesTab: some View {
         ScrollView {
-            if expenseVM.expenses.isEmpty {
-                emptyState(icon: "receipt.fill", text: "Belum ada pengeluaran", sub: "Tap + untuk tambah expense pertamamu!")
-            } else {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    ForEach(groupedExpensesByDay.keys.sorted(by: >), id: \.self) { date in
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Date Header
-                            Text(formatDateHeader(date))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.textPrimary.opacity(0.8))
-                                .padding(.horizontal, 16)
+            VStack(spacing: 0) {
+                // Financial Summary Card
+                financialSummaryCardView
 
-                            // Expenses for this day
-                            VStack(spacing: 12) {
-                                ForEach(groupedExpensesByDay[date] ?? []) { expense in
-                                    NavigationLink(destination: ExpenseDetailView(expense: expense, currency: trip.currency)
-                                        .environmentObject(expenseVM)
-                                        .environmentObject(authVM)) {
-                                        ExpenseRow(expense: expense, currency: trip.currency)
+                if expenseVM.expenses.isEmpty {
+                    emptyState(icon: "receipt.fill", text: "Belum ada pengeluaran", sub: "Tap + untuk tambah expense pertamamu!")
+                } else {
+                    // Search Bar
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16))
+                            .foregroundColor(.textPrimary.opacity(0.4))
+
+                        TextField("Cari pengeluaran...", text: $expenseSearchText)
+                            .font(AppFont.subheadline())
+                            .foregroundColor(.textPrimary)
+
+                        if !expenseSearchText.isEmpty {
+                            Button {
+                                expenseSearchText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.textPrimary.opacity(0.4))
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(Color.borderSoft, lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+
+                    // Category Filter Pills
+                    if !availableCategories.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                // "Semua" pill
+                                Button {
+                                    selectedCategory = nil
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "square.grid.2x2")
+                                            .font(.system(size: 12))
+                                        Text("Semua")
+                                            .font(AppFont.caption())
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(selectedCategory == nil ? Color.brandPrimary : Color.cardFallback)
+                                    .foregroundColor(selectedCategory == nil ? .white : .textPrimary.opacity(0.7))
+                                    .clipShape(Capsule())
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(selectedCategory == nil ? Color.clear : Color.borderSoft, lineWidth: 1)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+
+                                // Category pills
+                                ForEach(availableCategories, id: \.self) { category in
+                                    let isSelected = selectedCategory == category
+                                    let categoryColor = Color(hex: category.color)
+
+                                    Button {
+                                        if selectedCategory == category {
+                                            selectedCategory = nil
+                                        } else {
+                                            selectedCategory = category
+                                        }
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: category.icon)
+                                                .font(.system(size: 12))
+                                            Text(category.displayName)
+                                                .font(AppFont.caption())
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(isSelected ? categoryColor : Color.cardFallback)
+                                        .foregroundColor(isSelected ? .white : .textPrimary.opacity(0.7))
+                                        .clipShape(Capsule())
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(isSelected ? Color.clear : Color.borderSoft, lineWidth: 1)
+                                        )
                                     }
                                     .buttonStyle(.plain)
                                 }
                             }
                             .padding(.horizontal, 16)
                         }
+                        .padding(.bottom, 8)
+                        .padding(.top, 8)
+                    }
+
+                    if filteredExpenses.isEmpty {
+                        // No search results
+                        VStack(spacing: 12) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 36))
+                                .foregroundColor(.textPrimary.opacity(0.2))
+                            Text("Tidak ada hasil")
+                                .font(AppFont.headline())
+                                .foregroundColor(.textPrimary.opacity(0.6))
+                            Text("Coba kata kunci lain")
+                                .font(AppFont.footnote())
+                                .foregroundColor(.textPrimary.opacity(0.35))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+                    } else {
+                        LazyVStack(alignment: .leading, spacing: 20) {
+                            ForEach(groupedExpensesByDay.keys.sorted(by: >), id: \.self) { date in
+                            VStack(alignment: .leading, spacing: 12) {
+                                // Date Header
+                                Text(formatDateHeader(date))
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.textPrimary.opacity(0.8))
+                                    .padding(.horizontal, 16)
+
+                                // Expenses for this day
+                                VStack(spacing: 12) {
+                                    ForEach(groupedExpensesByDay[date] ?? []) { expense in
+                                        NavigationLink(destination: ExpenseDetailView(expense: expense, currency: trip.currency)
+                                            .environmentObject(expenseVM)
+                                            .environmentObject(authVM)) {
+                                            ExpenseRow(expense: expense, currency: trip.currency)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+                        }
+                        .padding(.vertical, 16)
                     }
                 }
-                .padding(.vertical, 16)
             }
         }
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+    }
+
+    // MARK: - Filtered Expenses
+    private var filteredExpenses: [ExpenseModel] {
+        var results = expenseVM.expenses
+
+        // Filter by search text
+        if !expenseSearchText.isEmpty {
+            results = results.filter { expense in
+                expense.title.localizedCaseInsensitiveContains(expenseSearchText)
+            }
+        }
+
+        // Filter by category
+        if let category = selectedCategory {
+            results = results.filter { $0.category == category }
+        }
+
+        return results
+    }
+
+    // MARK: - Available Categories (only show categories that have expenses)
+    private var availableCategories: [ExpenseCategory] {
+        let usedCategories = Set(expenseVM.expenses.map { $0.category })
+        return ExpenseCategory.allCases.filter { usedCategories.contains($0) }
     }
 
     // MARK: - Group Expenses by Day
     private var groupedExpensesByDay: [Date: [ExpenseModel]] {
         let calendar = Calendar.current
-        let grouped = Dictionary(grouping: expenseVM.expenses) { expense in
+        let grouped = Dictionary(grouping: filteredExpenses) { expense in
             calendar.startOfDay(for: expense.createdAt.dateValue())
         }
         return grouped
@@ -847,7 +1234,7 @@ struct SettlementRow: View {
     private var statusColor: Color {
         switch settlement.status {
         case .pending:  return .warningAmber
-        case .verified: return .successGreen
+        case .verified, .approved: return .successGreen
         case .rejected: return .errorRed
         }
     }
@@ -855,7 +1242,7 @@ struct SettlementRow: View {
     private var statusLabel: String {
         switch settlement.status {
         case .pending:  return "Menunggu"
-        case .verified: return "Terverifikasi"
+        case .verified, .approved: return "Terverifikasi"
         case .rejected: return "Ditolak"
         }
     }
@@ -894,5 +1281,197 @@ struct SettlementRow: View {
         .padding(12)
         .background(Color.cardFallback)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Transfer Owner Sheet
+struct TransferOwnerSheet: View {
+    @Binding var isPresented: Bool
+    let trip: TripModel
+    let suspendedMemberUIDs: Set<String>
+    let onTransfer: (String, String) -> Void
+
+    @State private var selectedMemberUID: String?
+    @State private var showConfirmAlert = false
+
+    private var eligibleMembers: [TripMember] {
+        trip.members.filter { member in
+            member.uid != trip.ownerUID && member.role != .pending
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Header description
+                VStack(spacing: 8) {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.warningAmber)
+                        .padding(.top, 20)
+
+                    Text("Alihkan Kepemilikan")
+                        .font(AppFont.title3())
+                        .fontWeight(.bold)
+                        .foregroundColor(.textPrimary)
+
+                    Text("Pilih anggota yang akan menjadi owner baru trip ini. Kamu akan tetap menjadi admin setelah mengalihkan kepemilikan.")
+                        .font(AppFont.footnote())
+                        .foregroundColor(.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+                .padding(.bottom, 20)
+
+                Divider()
+
+                // Member list
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(eligibleMembers) { member in
+                            let isSuspended = suspendedMemberUIDs.contains(member.uid)
+                            let isDisabled = isSuspended
+                            let isSelected = selectedMemberUID == member.uid
+
+                            Button {
+                                if !isDisabled {
+                                    selectedMemberUID = member.uid
+                                }
+                            } label: {
+                                HStack(spacing: 14) {
+                                    ZStack(alignment: .bottomTrailing) {
+                                        AvatarView(url: member.avatarURL, initials: String(member.displayName.prefix(2)).uppercased(), size: 44)
+                                            .opacity(isDisabled ? 0.4 : 1.0)
+
+                                        if isSuspended {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.errorRed)
+                                                .background(Circle().fill(Color.cardFallback).frame(width: 16, height: 16))
+                                        }
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack(spacing: 6) {
+                                            Text(member.displayName)
+                                                .font(AppFont.subheadline())
+                                                .foregroundColor(isDisabled ? .textPrimary.opacity(0.4) : .textPrimary)
+
+                                            if member.role == .admin {
+                                                Text("Admin")
+                                                    .font(AppFont.caption2())
+                                                    .foregroundColor(.brandPrimary)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.brandPrimary.opacity(0.15))
+                                                    .clipShape(Capsule())
+                                            }
+
+                                            if isSuspended {
+                                                Text("Ditangguhkan")
+                                                    .font(AppFont.caption2())
+                                                    .foregroundColor(.errorRed)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.errorRed.opacity(0.15))
+                                                    .clipShape(Capsule())
+                                            }
+                                        }
+
+                                        Text(member.role.rawValue.capitalized)
+                                            .font(AppFont.caption())
+                                            .foregroundColor(.textSecondary)
+                                    }
+
+                                    Spacer()
+
+                                    if isDisabled {
+                                        Image(systemName: "nosign")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(.textPrimary.opacity(0.2))
+                                    } else {
+                                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 24))
+                                            .foregroundColor(isSelected ? .brandPrimary : .textPrimary.opacity(0.2))
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 14)
+                                .background(isSelected ? Color.brandPrimary.opacity(0.08) : Color.clear)
+                            }
+                            .disabled(isDisabled)
+
+                            Divider().padding(.leading, 78)
+                        }
+
+                        if eligibleMembers.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "person.slash")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.textPrimary.opacity(0.3))
+                                Text("Tidak ada anggota yang eligible")
+                                    .font(AppFont.subheadline())
+                                    .foregroundColor(.textSecondary)
+                                Text("Semua anggota masih pending atau ditangguhkan")
+                                    .font(AppFont.caption())
+                                    .foregroundColor(.textPrimary.opacity(0.4))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                        }
+                    }
+                }
+
+                // Confirm button
+                VStack(spacing: 12) {
+                    Button {
+                        showConfirmAlert = true
+                    } label: {
+                        Text("Alihkan Kepemilikan")
+                            .font(AppFont.headline())
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                selectedMemberUID != nil
+                                    ? AnyShapeStyle(LinearGradient.brandGradient)
+                                    : AnyShapeStyle(Color.textPrimary.opacity(0.2))
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.full))
+                    }
+                    .disabled(selectedMemberUID == nil)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(Color.baseFallback)
+            }
+            .background(Color.baseFallback)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Batal") {
+                        isPresented = false
+                    }
+                    .foregroundColor(.textPrimary.opacity(0.7))
+                }
+            }
+            .alert("Konfirmasi Pengalihan", isPresented: $showConfirmAlert) {
+                Button("Batal", role: .cancel) { }
+                Button("Alihkan") {
+                    if let uid = selectedMemberUID,
+                       let member = eligibleMembers.first(where: { $0.uid == uid }) {
+                        isPresented = false
+                        onTransfer(uid, member.displayName)
+                    }
+                }
+            } message: {
+                if let uid = selectedMemberUID,
+                   let member = eligibleMembers.first(where: { $0.uid == uid }) {
+                    Text("Kamu yakin ingin mengalihkan kepemilikan trip \"\(trip.name)\" ke \(member.displayName)?")
+                } else {
+                    Text("Pilih anggota terlebih dahulu.")
+                }
+            }
+        }
     }
 }

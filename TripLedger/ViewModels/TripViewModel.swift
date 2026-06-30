@@ -30,7 +30,11 @@ final class TripViewModel: ObservableObject {
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
                 if let error = error {
-                    print("⚠️ TripVM listenTrips error: \(error.localizedDescription)")
+                    print("❌ [TripVM] listenTrips error")
+                    print("   Error Code: \((error as NSError).code)")
+                    print("   Error Domain: \((error as NSError).domain)")
+                    print("   Description: \(error.localizedDescription)")
+                    print("   Full Error: \(error)")
                     self?.errorMessage = error.localizedDescription
                     return
                 }
@@ -140,18 +144,18 @@ final class TripViewModel: ObservableObject {
         guard let inviteID = invite.id else { return }
         do {
             try await db.update(collection: Collection.invites, documentID: inviteID, fields: ["status": "accepted"])
-            
+
             let tripDoc = try await db.db.collection(Collection.trips).document(invite.tripID).getDocument()
             if var trip = try? tripDoc.data(as: TripModel.self) {
                 trip.members.removeAll(where: { $0.uid == user.uid })
-                
+
                 let newMember = TripMember(id: user.uid, uid: user.uid, displayName: user.displayName, avatarURL: user.avatarURL, role: .member, joinedAt: Timestamp(date: Date()))
                 trip.members.append(newMember)
-                
+
                 if !trip.memberUIDs.contains(user.uid) {
                     trip.memberUIDs.append(user.uid)
                 }
-                
+
                 let memberDicts = trip.members.map { [
                     "id": $0.id,
                     "uid": $0.uid,
@@ -160,11 +164,28 @@ final class TripViewModel: ObservableObject {
                     "role": $0.role.rawValue,
                     "joinedAt": $0.joinedAt
                 ]}
-                
+
                 try await db.update(collection: Collection.trips, documentID: invite.tripID, fields: [
                     "memberUIDs": trip.memberUIDs,
                     "members": memberDicts
                 ])
+
+                // Send notification to trip owner that member has joined
+                if trip.ownerUID != user.uid {
+                    let notifRef = db.db.collection(Collection.notifications).document()
+                    let notification: [String: Any] = [
+                        "recipientUID": trip.ownerUID,
+                        "type": "tripInvite",
+                        "title": "Anggota Baru Bergabung",
+                        "body": "\(user.displayName) telah bergabung ke trip \"\(trip.name)\"",
+                        "isRead": false,
+                        "referenceID": invite.tripID,
+                        "senderUID": user.uid,
+                        "senderName": user.displayName,
+                        "createdAt": Timestamp(date: Date())
+                    ]
+                    try await notifRef.setData(notification)
+                }
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -248,13 +269,13 @@ final class TripViewModel: ObservableObject {
     }
 
     // MARK: - Kick member
-    func kickMember(tripID: String, memberUID: String) async {
+    func kickMember(tripID: String, memberUID: String, kickedBy: UserModel? = nil) async {
         do {
             let tripDoc = try await db.db.collection(Collection.trips).document(tripID).getDocument()
             if var trip = try? tripDoc.data(as: TripModel.self) {
                 trip.memberUIDs.removeAll(where: { $0 == memberUID })
                 trip.members.removeAll(where: { $0.uid == memberUID })
-                
+
                 let memberDicts = trip.members.map { [
                     "id": $0.id,
                     "uid": $0.uid,
@@ -263,11 +284,28 @@ final class TripViewModel: ObservableObject {
                     "role": $0.role.rawValue,
                     "joinedAt": $0.joinedAt
                 ]}
-                
+
                 try await db.update(collection: Collection.trips, documentID: tripID, fields: [
                     "memberUIDs": trip.memberUIDs,
                     "members": memberDicts
                 ])
+
+                // Send notification to kicked member
+                if let kicker = kickedBy {
+                    let notifRef = db.db.collection(Collection.notifications).document()
+                    let notification: [String: Any] = [
+                        "recipientUID": memberUID,
+                        "type": "general",
+                        "title": "Dikeluarkan dari Trip",
+                        "body": "Kamu telah dikeluarkan dari trip \"\(trip.name)\" oleh \(kicker.displayName)",
+                        "isRead": false,
+                        "referenceID": tripID,
+                        "senderUID": kicker.uid,
+                        "senderName": kicker.displayName,
+                        "createdAt": Timestamp(date: Date())
+                    ]
+                    try await notifRef.setData(notification)
+                }
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -280,19 +318,97 @@ final class TripViewModel: ObservableObject {
     }
 
     // MARK: - Transfer ownership
-    func transferOwnership(tripID: String, newOwnerUID: String, currentOwnerUID: String) async {
+    func transferOwnership(tripID: String, newOwnerUID: String) async {
         do {
+            // Fetch current trip data
+            let doc = try await db.db.collection(Collection.trips).document(tripID).getDocument()
+            guard var trip = try? doc.data(as: TripModel.self) else {
+                print("❌ [TripVM] Failed to fetch trip for ownership transfer")
+                return
+            }
+
+            let oldOwnerUID = trip.ownerUID
+
+            // Update members array - change roles
+            var updatedMembers = trip.members
+
+            // New owner becomes owner
+            if let newOwnerIndex = updatedMembers.firstIndex(where: { $0.uid == newOwnerUID }) {
+                updatedMembers[newOwnerIndex] = TripMember(
+                    id: updatedMembers[newOwnerIndex].id,
+                    uid: updatedMembers[newOwnerIndex].uid,
+                    displayName: updatedMembers[newOwnerIndex].displayName,
+                    avatarURL: updatedMembers[newOwnerIndex].avatarURL,
+                    role: .owner,
+                    joinedAt: updatedMembers[newOwnerIndex].joinedAt
+                )
+            }
+
+            // Old owner becomes regular member
+            if let oldOwnerIndex = updatedMembers.firstIndex(where: { $0.uid == oldOwnerUID }) {
+                updatedMembers[oldOwnerIndex] = TripMember(
+                    id: updatedMembers[oldOwnerIndex].id,
+                    uid: updatedMembers[oldOwnerIndex].uid,
+                    displayName: updatedMembers[oldOwnerIndex].displayName,
+                    avatarURL: updatedMembers[oldOwnerIndex].avatarURL,
+                    role: .member,
+                    joinedAt: updatedMembers[oldOwnerIndex].joinedAt
+                )
+            }
+
+            // Remove old owner from adminUIDs
+            var newAdminUIDs = trip.adminUIDs.filter { $0 != oldOwnerUID }
+
+            // Prepare members dict for Firestore
+            let memberDicts = updatedMembers.map { [
+                "id": $0.id,
+                "uid": $0.uid,
+                "displayName": $0.displayName,
+                "avatarURL": $0.avatarURL ?? "",
+                "role": $0.role.rawValue,
+                "joinedAt": $0.joinedAt
+            ]}
+
+            // Ensure new owner is in adminUIDs
+            if !newAdminUIDs.contains(newOwnerUID) {
+                newAdminUIDs.append(newOwnerUID)
+            }
+
+            // Update trip document
             try await db.update(collection: Collection.trips, documentID: tripID, fields: [
-                "ownerUID":  newOwnerUID,
-                "adminUIDs": FieldValue.arrayUnion([newOwnerUID])
+                "ownerUID": newOwnerUID,
+                "adminUIDs": newAdminUIDs,
+                "members": memberDicts
             ])
+
+            // Get old owner's display name
+            let oldOwnerName = trip.members.first(where: { $0.uid == oldOwnerUID })?.displayName ?? "Seseorang"
+
+            // Send notification to new owner
+            let notification = NotificationModel(
+                recipientUID: newOwnerUID,
+                type: .general,
+                title: "Kamu Sekarang Owner Trip",
+                body: "\(oldOwnerName) telah mengalihkan kepemilikan trip \"\(trip.name)\" kepadamu. Sekarang kamu adalah owner trip ini.",
+                isRead: false,
+                referenceID: tripID,
+                senderUID: oldOwnerUID,
+                senderName: oldOwnerName,
+                createdAt: Timestamp(date: Date())
+            )
+            try await db.db.collection(Collection.notifications).addDocument(from: notification)
+
+            print("✅ [TripVM] Ownership transferred from \(oldOwnerUID) to \(newOwnerUID)")
         } catch {
             errorMessage = error.localizedDescription
+            print("❌ [TripVM] Error transferring ownership: \(error)")
         }
     }
 
     // MARK: - Update trip
     func updateTrip(tripID: String, name: String, currency: String, emoji: String, startDate: Date, endDate: Date) async {
+        errorMessage = nil // Clear previous error
+
         do {
             // Determine status based on startDate
             let calendar = Calendar.current
@@ -301,7 +417,10 @@ final class TripViewModel: ObservableObject {
 
             // Get current trip to check current status
             let tripDoc = try await db.db.collection(Collection.trips).document(tripID).getDocument()
-            guard let currentTrip = try? tripDoc.data(as: TripModel.self) else { return }
+            guard let currentTrip = try? tripDoc.data(as: TripModel.self) else {
+                errorMessage = "Trip tidak ditemukan"
+                return
+            }
 
             // Only update status if trip is currently "planned" or "active"
             // Don't change if already "finished" or "deleted"
@@ -310,7 +429,8 @@ final class TripViewModel: ObservableObject {
                 "currency": currency,
                 "coverEmoji": emoji,
                 "startDate": Timestamp(date: startDate),
-                "endDate": Timestamp(date: endDate)
+                "endDate": Timestamp(date: endDate),
+                "updatedAt": Timestamp(date: Date())
             ]
 
             if currentTrip.status == .planned || currentTrip.status == .active {
@@ -318,9 +438,11 @@ final class TripViewModel: ObservableObject {
                 fieldsToUpdate["status"] = newStatus.rawValue
             }
 
-            try await db.update(collection: Collection.trips, documentID: tripID, fields: fieldsToUpdate)
+            try await db.db.collection(Collection.trips).document(tripID).updateData(fieldsToUpdate)
+            print("✅ [TripVM] Trip updated successfully")
         } catch {
-            errorMessage = error.localizedDescription
+            print("❌ [TripVM] Error updating trip: \(error)")
+            errorMessage = "Gagal memperbarui trip. Pastikan kamu adalah owner trip ini."
         }
     }
 }

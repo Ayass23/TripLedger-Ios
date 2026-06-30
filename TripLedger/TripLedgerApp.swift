@@ -20,6 +20,8 @@ struct TripLedgerApp: App {
     @StateObject private var adminVM      = AdminViewModel()
     @StateObject private var network      = NetworkMonitor.shared
 
+    @State private var showAppealForm = false
+
     init() {
         FirebaseApp.configure()
         configureTabBarAppearance()
@@ -61,6 +63,31 @@ struct TripLedgerApp: App {
             .environmentObject(network)
             .preferredColorScheme(.light)
             .animation(.easeInOut(duration: 0.35), value: authVM.isAuthenticated)
+            .alert("Akun Disuspend", isPresented: $authVM.showSuspendedAlert) {
+                Button("Ajukan Banding") {
+                    showAppealForm = true
+                }
+                Button("OK", role: .cancel) { }
+            } message: {
+                if let reason = authVM.suspendReason, !reason.isEmpty {
+                    Text("Alasan: \(reason)\n\nJika kamu merasa ini adalah kesalahan, silakan ajukan banding.")
+                } else {
+                    Text("Akun kamu telah disuspend oleh admin.\n\nJika kamu merasa ini adalah kesalahan, silakan ajukan banding.")
+                }
+            }
+            .sheet(isPresented: $showAppealForm) {
+                if let info = authVM.suspendedUserInfo {
+                    AppealFormView(
+                        suspendReason: authVM.suspendReason ?? "Akun Anda telah disuspend oleh admin.",
+                        userUID: info.uid,
+                        userName: info.name,
+                        userEmail: info.email
+                    )
+                    .environmentObject(authVM)
+                } else {
+                    PublicAppealFormView()
+                }
+            }
         }
     }
 

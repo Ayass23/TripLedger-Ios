@@ -15,7 +15,24 @@ struct Transaction: Identifiable {
 enum SettlementStatus: String, Codable {
     case pending  = "pending"
     case verified = "verified"
+    case approved = "approved"
     case rejected = "rejected"
+
+    var displayName: String {
+        switch self {
+        case .pending: return "Menunggu Verifikasi"
+        case .verified, .approved: return "Disetujui"
+        case .rejected: return "Ditolak"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .pending: return "clock.fill"
+        case .verified, .approved: return "checkmark.circle.fill"
+        case .rejected: return "xmark.circle.fill"
+        }
+    }
 }
 
 // MARK: - Settlement Model (stored in Firestore)

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import FirebaseFirestore
 
 struct CreateSplitBillView: View {
@@ -14,7 +15,8 @@ struct CreateSplitBillView: View {
 
     // UI State
     @State private var step = 1
-    
+    @State private var showSuccessAlert = false
+
     // Step 1: Info Dasar
     @State private var title       = ""
     @State private var amountStr   = ""
@@ -22,13 +24,17 @@ struct CreateSplitBillView: View {
     @State private var category    = ExpenseCategory.food
     @State private var notes       = ""
     @State private var transactionDate = Date()
-    @State private var showImagePicker = false
+    @State private var showPhotoSourcePicker = false
+    @State private var showCameraPicker = false
+    @State private var showGalleryPicker = false
     @State private var selectedImage: UIImage? = nil
+    @State private var showDatePicker = false
 
     // Additional charges (editable)
     @State private var taxAmountStr = ""
     @State private var serviceChargeStr = ""
     @State private var discountStr = ""
+    @State private var roundingStr = ""
 
     private var totalAmount: Double {
         let cleaned = amountStr
@@ -64,6 +70,15 @@ struct CreateSplitBillView: View {
         return Double(cleaned) ?? 0
     }
 
+    private var rounding: Double {
+        let cleaned = roundingStr
+            .replacingOccurrences(of: ".", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        // Rounding can be negative (starts with -)
+        return Double(cleaned) ?? 0
+    }
+
     private var isStep1Valid: Bool { !title.isBlank && totalAmount > 0 }
 
     // Step 2: Participants
@@ -82,19 +97,29 @@ struct CreateSplitBillView: View {
     @State private var loadingMessage = ""
 
     // Step 3: Item-based Splits
-    struct ItemEntry: Identifiable, Hashable {
+    struct ItemEntry: Identifiable {
         let id = UUID()
         var name: String
         var price: Double
         var quantity: Int = 1
         var selectedParticipantIDs: Set<String> = []  // IDs of participants who bought this item
+        var customSplits: [String: ParticipantSplitDetail] = [:]  // Custom split per participant
     }
     @State private var items: [ItemEntry] = []
     @State private var showEditItem: ItemEntry?  // Item being edited
     @State private var showAddItem = false  // Show add item sheet
+    @State private var showAturPembagian: ItemEntry?  // Item for custom split
     @State private var editingItemName = ""
     @State private var editingItemPrice = ""
     @State private var editingItemQuantity = 1
+
+    // Split Mode for Step 3
+    enum SplitMode: String, CaseIterable {
+        case bagiRata = "Bagi Rata"
+        case inputManual = "Input Manual"
+    }
+    @State private var splitMode: SplitMode = .bagiRata
+    @State private var participantAmounts: [String: String] = [:]  // participantID -> amount string
 
     private var activeParticipants: [ParticipantEntry] { participants.filter { $0.isSelected } }
 
@@ -105,18 +130,24 @@ struct CreateSplitBillView: View {
         // Calculate items
         for item in items {
             if item.selectedParticipantIDs.contains(participantID) {
-                let shareCount = item.selectedParticipantIDs.count
-                if shareCount > 0 {
-                    itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
+                // Check if custom split exists for this item and participant
+                if let customSplit = item.customSplits[participantID], !item.customSplits.isEmpty {
+                    itemTotal += customSplit.customAmount
+                } else {
+                    // Default: equal split
+                    let shareCount = item.selectedParticipantIDs.count
+                    if shareCount > 0 {
+                        itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
+                    }
                 }
             }
         }
 
-        // Add proportional tax, service charge, and subtract proportional discount
+        // Add proportional tax, service charge, rounding, and subtract proportional discount
         let itemsTotal = items.reduce(0.0) { $0 + ($1.price * Double($1.quantity)) }
         if itemsTotal > 0 {
             let proportion = itemTotal / itemsTotal
-            itemTotal += (taxAmount + serviceCharge) * proportion
+            itemTotal += (taxAmount + serviceCharge + rounding) * proportion
             itemTotal -= discount * proportion
         }
 
@@ -124,20 +155,87 @@ struct CreateSplitBillView: View {
     }
 
     private var calculatedTotal: Double {
-        // Sum of all item prices with quantities plus tax and service minus discount
+        // Sum of all item prices with quantities plus tax, service, rounding, minus discount
         let itemsTotal = items.reduce(0) { $0 + ($1.price * Double($1.quantity)) }
-        return itemsTotal + taxAmount + serviceCharge - discount
+        return itemsTotal + taxAmount + serviceCharge + rounding - discount
     }
 
     private var isStep3Valid: Bool {
-        // Valid if all items have at least one participant selected AND total matches
+        // Valid if all items have at least one participant selected AND total matches AND all participants have items
         !items.isEmpty &&
         items.allSatisfy { !$0.selectedParticipantIDs.isEmpty } &&
-        abs(calculatedTotal - totalAmount) < 0.01
+        abs(calculatedTotal - totalAmount) < 0.01 &&
+        allParticipantsHaveItems
     }
 
     private var isTotalMatching: Bool {
         abs(calculatedTotal - totalAmount) < 0.01
+    }
+
+    // Participants who don't have any items assigned
+    private var participantsWithoutItems: [ParticipantEntry] {
+        activeParticipants.filter { participant in
+            calculateParticipantAmount(participant.id) == 0
+        }
+    }
+
+    private var allParticipantsHaveItems: Bool {
+        participantsWithoutItems.isEmpty
+    }
+
+    // MARK: - Bagi Rata Mode Helpers
+    private func parseAmount(_ str: String) -> Double {
+        let cleaned = str
+            .replacingOccurrences(of: ".", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        return Double(cleaned) ?? 0
+    }
+
+    private var bagiRataTotalInput: Double {
+        activeParticipants.reduce(0) { total, participant in
+            total + parseAmount(participantAmounts[participant.id] ?? "0")
+        }
+    }
+
+    private var isBagiRataMatching: Bool {
+        abs(bagiRataTotalInput - totalAmount) < 1  // Allow Rp 1 tolerance
+    }
+
+    private var allParticipantsHaveAmount: Bool {
+        activeParticipants.allSatisfy { participant in
+            parseAmount(participantAmounts[participant.id] ?? "0") > 0
+        }
+    }
+
+    private var isStep3ValidBagiRata: Bool {
+        isBagiRataMatching && allParticipantsHaveAmount
+    }
+
+    private func distributeEvenly() {
+        let count = activeParticipants.count
+        guard count > 0 else { return }
+        let evenAmount = totalAmount / Double(count)
+        let roundedAmount = floor(evenAmount)  // Round down to avoid exceeding total
+
+        for (index, participant) in activeParticipants.enumerated() {
+            if index == activeParticipants.count - 1 {
+                // Last person gets the remainder to ensure exact total
+                let currentTotal = Double(activeParticipants.count - 1) * roundedAmount
+                let remainder = totalAmount - currentTotal
+                participantAmounts[participant.id] = String(Int(remainder))
+            } else {
+                participantAmounts[participant.id] = String(Int(roundedAmount))
+            }
+        }
+    }
+
+    private func initializeParticipantAmounts() {
+        for participant in activeParticipants {
+            if participantAmounts[participant.id] == nil {
+                participantAmounts[participant.id] = ""
+            }
+        }
     }
 
     // MARK: - Main Content View
@@ -191,6 +289,7 @@ struct CreateSplitBillView: View {
                 .onChange(of: taxAmountStr, perform: handleTaxAmountChange)
                 .onChange(of: serviceChargeStr, perform: handleServiceChargeChange)
                 .onChange(of: discountStr, perform: handleDiscountChange)
+                .onChange(of: roundingStr, perform: handleRoundingChange)
                 .onChange(of: showEditBankView, perform: handleBankViewDismiss)
         }
         .sheet(isPresented: $showAddGuest) {
@@ -204,14 +303,52 @@ struct CreateSplitBillView: View {
         .sheet(isPresented: $showAddItem) {
             addItemSheet()
         }
+        .sheet(item: $showAturPembagian) { item in
+            aturPembagianSheet(item: item)
+        }
         .sheet(isPresented: $showEditBankView) {
             NavigationStack {
                 EditBankView(profileVM: profileVM)
                     .environmentObject(authVM)
             }
         }
-        .sheet(isPresented: $showImagePicker) {
-            ImagePicker(selectedImage: $selectedImage)
+        .sheet(isPresented: $showPhotoSourcePicker) {
+            PhotoSourcePickerView(
+                onSelectCamera: {
+                    showCameraPicker = true
+                },
+                onSelectGallery: {
+                    showGalleryPicker = true
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showCameraPicker) {
+            ImagePicker(selectedImage: $selectedImage, sourceType: .camera)
+                .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showGalleryPicker) {
+            ImagePicker(selectedImage: $selectedImage, sourceType: .photoLibrary)
+        }
+        .sheet(isPresented: $showDatePicker) {
+            NavigationStack {
+                VStack {
+                    DatePicker("Pilih Tanggal", selection: $transactionDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .environment(\.locale, Locale(identifier: "id_ID"))
+                        .padding()
+                    Spacer()
+                }
+                .navigationTitle("Pilih Tanggal")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Selesai") {
+                            showDatePicker = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
         }
         .alert("Rekening Belum Diisi", isPresented: $showBankAccountAlert) {
             Button("Batal", role: .cancel) {
@@ -222,6 +359,13 @@ struct CreateSplitBillView: View {
             }
         } message: {
             Text("Orang yang bayar dulu belum punya nomor rekening. Silakan isi rekening terlebih dahulu.")
+        }
+        .alert("Berhasil", isPresented: $showSuccessAlert) {
+            Button("OK") {
+                dismiss()
+            }
+        } message: {
+            Text("Split bill berhasil disimpan!")
         }
         .tint(.brandPrimary)
     }
@@ -297,6 +441,11 @@ struct CreateSplitBillView: View {
                     discountStr = String(Int(disc))
                     print("   🎟️  Discount: \(currency) \(disc)")
                 }
+                if let round = parsed.rounding {
+                    // Rounding can be negative
+                    roundingStr = String(Int(round))
+                    print("   🔄 Rounding: \(currency) \(round)")
+                }
 
                 // Fill date if available
                 if let dateStr = parsed.date, let date = parseDate(dateStr) {
@@ -368,6 +517,15 @@ struct CreateSplitBillView: View {
         if discountStr != formatted { discountStr = formatted }
     }
 
+    private func handleRoundingChange(_ newValue: String) {
+        // Rounding can be negative, so we need special handling
+        let isNegative = newValue.hasPrefix("-")
+        let cleanedForFormat = newValue.replacingOccurrences(of: "-", with: "")
+        let formatted = cleanedForFormat.formattedAsCurrency()
+        let finalValue = isNegative ? "-\(formatted)" : formatted
+        if roundingStr != finalValue { roundingStr = finalValue }
+    }
+
     private func handleBankViewDismiss(_ isShowing: Bool) {
         if !isShowing && step == 2 {
             if !checkBankAccountBeforeContinue() {
@@ -400,7 +558,7 @@ struct CreateSplitBillView: View {
                                 .frame(maxWidth: .infinity)
                                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                                 .contentShape(Rectangle())
-                                .onTapGesture { showImagePicker = true }
+                                .onTapGesture { showPhotoSourcePicker = true }
 
                             Button {
                                 selectedImage = nil
@@ -413,7 +571,7 @@ struct CreateSplitBillView: View {
                             .padding(8)
                         }
                     } else {
-                        Button { showImagePicker = true } label: {
+                        Button { showPhotoSourcePicker = true } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "photo.badge.plus")
                                     .font(.system(size: 18))
@@ -499,28 +657,37 @@ struct CreateSplitBillView: View {
                     .font(AppFont.subheadline())
                     .foregroundColor(.textPrimary.opacity(0.6))
 
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.warningAmber.opacity(0.15))
-                            .frame(width: 40, height: 40)
-                        Image(systemName: "calendar")
-                            .font(.system(size: 18))
-                            .foregroundColor(.warningAmber)
-                    }
+                Button {
+                    showDatePicker = true
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.warningAmber.opacity(0.15))
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "calendar")
+                                .font(.system(size: 18))
+                                .foregroundColor(.warningAmber)
+                        }
 
-                    DatePicker("", selection: $transactionDate, displayedComponents: .date)
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(formatTransactionDate(transactionDate))
+                            .font(AppFont.subheadline())
+                            .foregroundColor(.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14))
+                            .foregroundColor(.textPrimary.opacity(0.3))
+                    }
+                    .padding(14)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(Color.warningAmber.opacity(0.3), lineWidth: 1)
+                    )
                 }
-                .padding(14)
-                .background(Color.cardFallback)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .stroke(Color.warningAmber.opacity(0.3), lineWidth: 1)
-                )
+                .buttonStyle(.plain)
             }
 
             // Kategori
@@ -723,18 +890,261 @@ struct CreateSplitBillView: View {
         }
     }
 
-    // MARK: - Step 3: Siapa Beli Apa
+    // MARK: - Step 3: Atur Pembagian
     private var step3View: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Header
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Siapa aja yang beli apa?")
+            // If source is scan, go directly to input manual (item-based)
+            if source == .scan {
+                // Header for scan
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Siapa aja yang beli apa?")
+                        .font(AppFont.headline())
+                        .foregroundColor(.textPrimary)
+                    Text("Centang item yang dibeli oleh masing-masing orang")
+                        .font(AppFont.caption())
+                        .foregroundColor(.textPrimary.opacity(0.6))
+                }
+
+                inputManualView
+            } else {
+                // Header for manual
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Atur Pembagian")
+                        .font(AppFont.headline())
+                        .foregroundColor(.textPrimary)
+                    Text("Pilih metode pembagian tagihan")
+                        .font(AppFont.caption())
+                        .foregroundColor(.textPrimary.opacity(0.6))
+                }
+
+                // Split Mode Selector (only for manual source)
+                HStack(spacing: 0) {
+                    ForEach(SplitMode.allCases, id: \.self) { mode in
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                splitMode = mode
+                                if mode == .bagiRata {
+                                    initializeParticipantAmounts()
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: mode == .bagiRata ? "equal.circle.fill" : "list.bullet.clipboard.fill")
+                                    .font(.system(size: 14))
+                                Text(mode.rawValue)
+                                    .font(AppFont.subheadline())
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundColor(splitMode == mode ? .white : .textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(splitMode == mode ? Color.brandPrimary : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                        }
+                    }
+                }
+                .padding(4)
+                .background(Color.cardFallback)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
+                        .stroke(Color.borderSoft, lineWidth: 1)
+                )
+
+                // Content based on mode
+                if splitMode == .bagiRata {
+                    bagiRataView
+                } else {
+                    inputManualView
+                }
+            }
+        }
+        .onAppear {
+            if source == .manual {
+                initializeParticipantAmounts()
+            }
+        }
+    }
+
+    // MARK: - Bagi Rata View
+    private var bagiRataView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Quick Actions
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    distributeEvenly()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 16))
+                    Text("Bagi Rata Otomatis")
+                        .font(AppFont.subheadline())
+                        .fontWeight(.semibold)
+                }
+                .foregroundColor(.brandPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.brandPrimary.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.md)
+                        .stroke(Color.brandPrimary.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+
+            // Info Text
+            Text("Masukkan nominal pembagian untuk masing-masing orang. Total harus sama dengan total tagihan.")
+                .font(AppFont.caption())
+                .foregroundColor(.textSecondary)
+                .padding(.horizontal, 4)
+
+            // Participants Amount List
+            VStack(spacing: 12) {
+                ForEach(activeParticipants) { participant in
+                    bagiRataParticipantRow(participant: participant)
+                }
+            }
+
+            // Total Summary
+            bagiRataSummary
+        }
+    }
+
+    // MARK: - Bagi Rata Participant Row
+    private func bagiRataParticipantRow(participant: ParticipantEntry) -> some View {
+        let amountBinding = Binding<String>(
+            get: { participantAmounts[participant.id] ?? "" },
+            set: { participantAmounts[participant.id] = $0 }
+        )
+        let amount = parseAmount(amountBinding.wrappedValue)
+        let hasAmount = amount > 0
+
+        return HStack(spacing: 12) {
+            // Avatar
+            ZStack {
+                Circle()
+                    .fill(Color.brandPrimary.opacity(0.15))
+                    .frame(width: 44, height: 44)
+
+                Text(String(participant.name.prefix(1)).uppercased())
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.brandPrimary)
+                    .fontWeight(.bold)
+            }
+
+            // Name
+            VStack(alignment: .leading, spacing: 2) {
+                Text(participant.name)
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary)
+                    .fontWeight(.medium)
+
+                if hasAmount {
+                    Text(amount.toCurrency(symbol: currency))
+                        .font(AppFont.caption())
+                        .foregroundColor(.brandPrimary)
+                }
+            }
+
+            Spacer()
+
+            // Amount Input
+            HStack(spacing: 4) {
+                Text(currency)
+                    .font(AppFont.caption())
+                    .foregroundColor(.textSecondary)
+                    .fixedSize()
+
+                TextField("0", text: amountBinding)
+                    .keyboardType(.numberPad)
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 100)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color.surfaceElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(14)
+        .background(Color.cardFallback)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(!hasAmount ? Color.warningAmber.opacity(0.5) : Color.borderSoft, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Bagi Rata Summary
+    private var bagiRataSummary: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Total Input")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textSecondary)
+                Spacer()
+                Text(bagiRataTotalInput.toCurrency(symbol: currency))
+                    .font(AppFont.headline())
+                    .foregroundColor(isBagiRataMatching ? .successGreen : .errorRed)
+            }
+
+            HStack {
+                Text("Total Tagihan")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textSecondary)
+                Spacer()
+                Text(totalAmount.toCurrency(symbol: currency))
                     .font(AppFont.headline())
                     .foregroundColor(.textPrimary)
-                Text("Centang item yang dibeli oleh masing-masing orang")
-                    .font(AppFont.caption())
-                    .foregroundColor(.textPrimary.opacity(0.6))
             }
+
+            if !isBagiRataMatching {
+                let difference = totalAmount - bagiRataTotalInput
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12))
+                    Text(difference > 0 ?
+                         "Kurang \(difference.toCurrency(symbol: currency))" :
+                         "Lebih \(abs(difference).toCurrency(symbol: currency))")
+                        .font(AppFont.caption())
+                }
+                .foregroundColor(.errorRed)
+            } else if allParticipantsHaveAmount {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12))
+                    Text("Pembagian sudah sesuai!")
+                        .font(AppFont.caption())
+                }
+                .foregroundColor(.successGreen)
+            }
+
+            if !allParticipantsHaveAmount {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.fill.xmark")
+                        .font(.system(size: 12))
+                    Text("Semua peserta harus memiliki nominal")
+                        .font(AppFont.caption())
+                }
+                .foregroundColor(.warningAmber)
+            }
+        }
+        .padding(16)
+        .background(Color.cardFallback)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+
+    // MARK: - Input Manual View (Original Step 3)
+    private var inputManualView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Helper Text
+            Text("Centang item yang dibeli oleh masing-masing orang")
+                .font(AppFont.caption())
+                .foregroundColor(.textPrimary.opacity(0.6))
+                .padding(.horizontal, 4)
 
             // Items List
             VStack(spacing: 16) {
@@ -803,6 +1213,8 @@ struct CreateSplitBillView: View {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         if item.selectedParticipantIDs.contains(participant.id) {
                                             item.selectedParticipantIDs.remove(participant.id)
+                                            // Also remove from custom splits
+                                            item.customSplits.removeValue(forKey: participant.id)
                                             print("🔴 [Step3] Removed \(participant.name) from \(item.name)")
                                         } else {
                                             item.selectedParticipantIDs.insert(participant.id)
@@ -825,6 +1237,31 @@ struct CreateSplitBillView: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+                        }
+
+                        // Atur Pembagian Button (only show if more than 1 participant)
+                        if item.selectedParticipantIDs.count > 1 {
+                            Button {
+                                showAturPembagian = item
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(.system(size: 14))
+                                    Text("Atur Pembagian")
+                                        .font(AppFont.caption())
+                                        .fontWeight(.medium)
+                                }
+                                .foregroundColor(.brandAccent)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.brandAccent.opacity(0.1))
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.brandAccent.opacity(0.3), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(16)
@@ -964,9 +1401,14 @@ struct CreateSplitBillView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Diskon")
-                                .font(AppFont.caption())
-                                .foregroundColor(.textPrimary.opacity(0.6))
+                            HStack(spacing: 4) {
+                                Text("Diskon")
+                                    .font(AppFont.caption())
+                                    .foregroundColor(.textPrimary.opacity(0.6))
+                                Text("(cth: 10000)")
+                                    .font(AppFont.caption2())
+                                    .foregroundColor(.textPrimary.opacity(0.4))
+                            }
                             TextField("0", text: $discountStr)
                                 .keyboardType(.decimalPad)
                                 .font(AppFont.subheadline())
@@ -991,6 +1433,52 @@ struct CreateSplitBillView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: AppRadius.md)
                             .stroke(discountStr.isEmpty ? Color.borderSoft : Color.successGreen.opacity(0.3), lineWidth: 1)
+                    )
+
+                    // Rounding (Pembulatan)
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.textSecondary.opacity(0.15))
+                                .frame(width: 36, height: 36)
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.system(size: 16))
+                                .foregroundColor(.textSecondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 4) {
+                                Text("Pembulatan")
+                                    .font(AppFont.caption())
+                                    .foregroundColor(.textPrimary.opacity(0.6))
+                                Text("(bisa - atau +)")
+                                    .font(AppFont.caption2())
+                                    .foregroundColor(.textPrimary.opacity(0.4))
+                            }
+                            TextField("0", text: $roundingStr)
+                                .keyboardType(.numbersAndPunctuation)
+                                .font(AppFont.subheadline())
+                                .foregroundColor(.textPrimary)
+                        }
+
+                        Spacer()
+
+                        if !roundingStr.isEmpty {
+                            Button {
+                                roundingStr = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.textPrimary.opacity(0.3))
+                                    .font(.system(size: 22))
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(roundingStr.isEmpty ? Color.borderSoft : Color.textSecondary.opacity(0.3), lineWidth: 1)
                     )
                 }
 
@@ -1088,8 +1576,22 @@ struct CreateSplitBillView: View {
                         .padding(.vertical, 2)
                     }
 
+                    // Rounding (if any)
+                    if rounding != 0 {
+                        HStack {
+                            Text("Pembulatan")
+                                .font(AppFont.caption())
+                                .foregroundColor(.textPrimary.opacity(0.6))
+                            Spacer()
+                            Text((rounding >= 0 ? "+ " : "- ") + abs(rounding).toCurrency(symbol: currency))
+                                .font(AppFont.caption())
+                                .foregroundColor(.textPrimary.opacity(0.6))
+                        }
+                        .padding(.vertical, 2)
+                    }
+
                     // Show proportional distribution note if there are additional charges
-                    if taxAmount > 0 || serviceCharge > 0 || discount > 0 {
+                    if taxAmount > 0 || serviceCharge > 0 || discount > 0 || rounding != 0 {
                         Text("*Dibagi proporsional sesuai item yang dibeli")
                             .font(AppFont.caption2())
                             .foregroundColor(.textPrimary.opacity(0.5))
@@ -1134,6 +1636,25 @@ struct CreateSplitBillView: View {
                         .foregroundColor(.errorRed)
                         .padding(.top, 4)
                     }
+
+                    // Warning if some participants don't have items
+                    if !participantsWithoutItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "person.fill.xmark")
+                                    .font(.system(size: 12))
+                                Text("Peserta berikut belum punya item:")
+                                    .font(AppFont.caption2())
+                            }
+                            .foregroundColor(.errorRed)
+
+                            Text(participantsWithoutItems.map { $0.name }.joined(separator: ", "))
+                                .font(AppFont.caption2())
+                                .fontWeight(.medium)
+                                .foregroundColor(.errorRed)
+                        }
+                        .padding(.top, 4)
+                    }
                 }
                 .padding(12)
                 .background(Color.surfaceElevated)
@@ -1175,6 +1696,9 @@ struct CreateSplitBillView: View {
                     }
                     .disabled(step == 1 ? !isStep1Valid : !isStep2Valid)
                 } else {
+                    // For scan source, always use item-based validation
+                    // For manual source, check split mode
+                    let isValid = source == .scan ? isStep3Valid : (splitMode == .bagiRata ? isStep3ValidBagiRata : isStep3Valid)
                     Button {
                         Task { await saveBill() }
                     } label: {
@@ -1183,10 +1707,10 @@ struct CreateSplitBillView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(isStep3Valid ? LinearGradient.brandGradient : LinearGradient(colors: [.gray.opacity(0.4)], startPoint: .leading, endPoint: .trailing))
+                            .background(isValid ? LinearGradient.brandGradient : LinearGradient(colors: [.gray.opacity(0.4)], startPoint: .leading, endPoint: .trailing))
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.full))
                     }
-                    .disabled(!isStep3Valid || splitBillVM.isLoading)
+                    .disabled(!isValid || splitBillVM.isLoading)
                 }
             }
             .padding(20)
@@ -1339,11 +1863,19 @@ struct CreateSplitBillView: View {
             }
         }
 
-        // Calculate amount for each participant based on their item selections
+        // Calculate amount for each participant based on split mode
+        // For scan source, always use item-based; for manual, check splitMode
+        let useItemBased = source == .scan || splitMode == .inputManual
+
         // Filter out participants with 0 amount
         let billParticipants: [SplitBillParticipant] = activeParticipants.compactMap { entry -> SplitBillParticipant? in
-            let calculatedAmount = calculateParticipantAmount(entry.id)
-            print("   👤 \(entry.name): \(currency) \(calculatedAmount)")
+            let calculatedAmount: Double
+            if useItemBased {
+                calculatedAmount = calculateParticipantAmount(entry.id)
+            } else {
+                calculatedAmount = parseAmount(participantAmounts[entry.id] ?? "0")
+            }
+            print("   👤 \(entry.name): \(currency) \(calculatedAmount) [mode: \(useItemBased ? "Per Item" : "Bagi Rata")]")
 
             // Skip participants with 0 amount
             guard calculatedAmount > 0 else {
@@ -1351,45 +1883,64 @@ struct CreateSplitBillView: View {
                 return nil
             }
 
+            // Owner (payer) is automatically marked as paid - they paid for everyone
+            let isOwnerParticipant = entry.uid == user.uid
+
             return SplitBillParticipant(
                 id: UUID().uuidString,
                 uid: entry.uid,
                 displayName: entry.name,
                 amount: calculatedAmount,
-                isPaid: false
+                isPaid: isOwnerParticipant
             )
         }
 
-        // Build notes with item breakdown (only include participants with amount > 0)
+        // Build notes with breakdown (only include participants with amount > 0)
         var notesText = notes.isBlank ? "" : notes + "\n\n"
         notesText += "Tanggal: \(formatDate(transactionDate))\n\n"
+        notesText += "Metode Pembagian: \(useItemBased ? "Per Item" : "Bagi Rata")\n\n"
 
         // Only show participants who owe money
         notesText += "Peserta Patungan:\n"
-        let participantsWithAmount = activeParticipants.filter { calculateParticipantAmount($0.id) > 0 }
+        let participantsWithAmount = activeParticipants.filter { participant in
+            if useItemBased {
+                return calculateParticipantAmount(participant.id) > 0
+            } else {
+                return parseAmount(participantAmounts[participant.id] ?? "0") > 0
+            }
+        }
         for participant in participantsWithAmount {
-            let amount = calculateParticipantAmount(participant.id)
+            let amount: Double
+            if useItemBased {
+                amount = calculateParticipantAmount(participant.id)
+            } else {
+                amount = parseAmount(participantAmounts[participant.id] ?? "0")
+            }
             notesText += "• \(participant.name): \(currency) \(Int(amount))\n"
         }
 
-        notesText += "\nPembagian Item:\n"
-        for item in items {
-            if !item.selectedParticipantIDs.isEmpty {
-                let participantNames = activeParticipants
-                    .filter { item.selectedParticipantIDs.contains($0.id) }
-                    .map { $0.name }
-                    .joined(separator: ", ")
-                let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
-                let itemTotal = item.price * Double(item.quantity)
-                notesText += "• \(qtyPrefix)\(item.name) (\(currency) \(Int(item.price))"
-                if item.quantity > 1 {
-                    notesText += " @ \(currency) \(Int(itemTotal))"
+        // Only show item breakdown for item-based mode
+        if useItemBased {
+            notesText += "\nPembagian Item:\n"
+            for item in items {
+                if !item.selectedParticipantIDs.isEmpty {
+                    let participantNames = activeParticipants
+                        .filter { item.selectedParticipantIDs.contains($0.id) }
+                        .map { $0.name }
+                        .joined(separator: ", ")
+                    let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
+                    let itemTotal = item.price * Double(item.quantity)
+                    notesText += "• \(qtyPrefix)\(item.name) (\(currency) \(Int(item.price))"
+                    if item.quantity > 1 {
+                        notesText += " @ \(currency) \(Int(itemTotal))"
+                    }
+                    notesText += "): \(participantNames)\n"
                 }
-                notesText += "): \(participantNames)\n"
             }
         }
 
-        if taxAmount > 0 || serviceCharge > 0 || discount > 0 {
+        // Only show additional charges for item-based mode
+        if useItemBased && (taxAmount > 0 || serviceCharge > 0 || discount > 0) {
             notesText += "\nBiaya Tambahan:\n"
             if taxAmount > 0 {
                 notesText += "• Pajak/PPN: \(currency) \(Int(taxAmount))\n"
@@ -1430,12 +1981,11 @@ struct CreateSplitBillView: View {
 
         print("✅ [CreateSplitBillView] Split bill saved successfully!")
 
-        // Hide loading overlay
+        // Hide loading overlay and show success alert
         await MainActor.run {
             showLoadingOverlay = false
+            showSuccessAlert = true
         }
-
-        dismiss()
     }
 
     // MARK: - Helper: Parse Date
@@ -1449,6 +1999,14 @@ struct CreateSplitBillView: View {
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
+        formatter.locale = Locale(identifier: "id_ID")
+        return formatter.string(from: date)
+    }
+
+    // MARK: - Helper: Format Transaction Date (Full format with day)
+    private func formatTransactionDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, d MMMM yyyy"
         formatter.locale = Locale(identifier: "id_ID")
         return formatter.string(from: date)
     }
@@ -1519,7 +2077,7 @@ struct CreateSplitBillView: View {
                     Button("Simpan") {
                         if let index = items.firstIndex(where: { $0.id == item.id }) {
                             items[index].name = editingItemName.trimmed
-                            items[index].price = Double(editingItemPrice.replacingOccurrences(of: ",", with: "")) ?? 0
+                            items[index].price = Double(editingItemPrice.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: "")) ?? 0
                             items[index].quantity = editingItemQuantity
                         }
                         showEditItem = nil
@@ -1558,7 +2116,7 @@ struct CreateSplitBillView: View {
                     Button("Tambah") {
                         let newItem = ItemEntry(
                             name: editingItemName.trimmed,
-                            price: Double(editingItemPrice.replacingOccurrences(of: ",", with: "")) ?? 0,
+                            price: Double(editingItemPrice.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: "")) ?? 0,
                             quantity: editingItemQuantity
                         )
                         items.append(newItem)
@@ -1572,6 +2130,39 @@ struct CreateSplitBillView: View {
             }
         }
         .presentationDetents([.medium])
+    }
+
+    // MARK: - Atur Pembagian Sheet
+    @ViewBuilder
+    private func aturPembagianSheet(item: ItemEntry) -> some View {
+        let selectedParticipants = activeParticipants.filter { item.selectedParticipantIDs.contains($0.id) }
+        let participantTuples = selectedParticipants.map { (id: $0.id, name: $0.name) }
+
+        AturPembagianView(
+            itemName: item.name,
+            itemPrice: item.price * Double(item.quantity),
+            itemQuantity: item.quantity,
+            currency: currency,
+            participants: participantTuples,
+            onSave: { splits in
+                // Update the item's custom splits
+                if let index = items.firstIndex(where: { $0.id == item.id }) {
+                    items[index].customSplits = splits
+
+                    // Remove participants with 0 portion from selectedParticipantIDs
+                    for (participantId, split) in splits {
+                        if split.portion == 0 {
+                            items[index].selectedParticipantIDs.remove(participantId)
+                            items[index].customSplits.removeValue(forKey: participantId)
+                            print("🔴 [CreateSplitBillView] Removed \(split.name) from \(item.name) (0 porsi)")
+                        } else {
+                            print("   👤 \(split.name): \(split.portion) porsi = \(currency) \(Int(split.customAmount))")
+                        }
+                    }
+                    print("✅ [CreateSplitBillView] Custom splits saved for \(item.name)")
+                }
+            }
+        )
     }
 }
 

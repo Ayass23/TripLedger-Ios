@@ -44,62 +44,47 @@ final class FriendsViewModel: ObservableObject {
         do {
             let lowerQuery = query.lowercased()
 
-            // Search by email prefix (case-insensitive)
-            let byEmail: [UserModel] = try await db.fetchList(collection: Collection.users) { ref in
-                ref.whereField("email", isGreaterThanOrEqualTo: lowerQuery)
-                   .whereField("email", isLessThan: lowerQuery + "\u{f8ff}")
-                   .limit(to: 10)
+            // Fetch all users (or a larger set) for client-side filtering
+            // This supports partial/contains matching
+            let allUsers: [UserModel] = try await db.fetchList(collection: Collection.users) { ref in
+                ref.limit(to: 100) // Fetch up to 100 users for client-side filtering
             }
 
-            // Search by name - try both lowercase and capitalized first letter
-            let capitalizedQuery = query.prefix(1).uppercased() + query.dropFirst().lowercased()
-
-            async let byNameLower: [UserModel] = db.fetchList(collection: Collection.users) { ref in
-                ref.whereField("displayName", isGreaterThanOrEqualTo: lowerQuery)
-                    .whereField("displayName", isLessThan: lowerQuery + "\u{f8ff}")
-                    .limit(to: 10)
+            // Filter users that contain the search query in their name or email (case-insensitive)
+            let filteredUsers = allUsers.filter { user in
+                let nameContains = user.displayName.lowercased().contains(lowerQuery)
+                let emailContains = user.email.lowercased().contains(lowerQuery)
+                return nameContains || emailContains
             }
 
-            async let byNameCapital: [UserModel] = db.fetchList(collection: Collection.users) { ref in
-                ref.whereField("displayName", isGreaterThanOrEqualTo: capitalizedQuery)
-                    .whereField("displayName", isLessThan: capitalizedQuery + "\u{f8ff}")
-                    .limit(to: 10)
-            }
-
-            async let byNameOriginal: [UserModel] = db.fetchList(collection: Collection.users) { ref in
-                ref.whereField("displayName", isGreaterThanOrEqualTo: query)
-                    .whereField("displayName", isLessThan: query + "\u{f8ff}")
-                    .limit(to: 10)
-            }
-
-            // Run all queries in parallel
-            let (emailResults, nameLowerResults, nameCapitalResults, nameOriginalResults) =
-                try await (byEmail, byNameLower, byNameCapital, byNameOriginal)
-
-            // Merge all results and remove duplicates
-            let combined = emailResults + nameLowerResults + nameCapitalResults + nameOriginalResults
-            let uniqueUsers = Dictionary(grouping: combined, by: { $0.uid })
-                .compactMap { $0.value.first }
-
-            // Filter out current user and sort by relevance
-            searchResults = uniqueUsers
+            // Filter out current user, sort by relevance (suspended users shown but marked)
+            searchResults = filteredUsers
                 .filter { $0.uid != currentUID }
                 .sorted { user1, user2 in
-                    // Prioritize exact matches (case-insensitive)
                     let name1Lower = user1.displayName.lowercased()
                     let name2Lower = user2.displayName.lowercased()
+                    let email1Lower = user1.email.lowercased()
+                    let email2Lower = user2.email.lowercased()
 
+                    // Prioritize exact matches (case-insensitive)
                     if name1Lower == lowerQuery && name2Lower != lowerQuery { return true }
                     if name2Lower == lowerQuery && name1Lower != lowerQuery { return false }
+                    if email1Lower == lowerQuery && email2Lower != lowerQuery { return true }
+                    if email2Lower == lowerQuery && email1Lower != lowerQuery { return false }
 
-                    // Then prioritize starts with
-                    let starts1 = name1Lower.hasPrefix(lowerQuery)
-                    let starts2 = name2Lower.hasPrefix(lowerQuery)
+                    // Then prioritize starts with in name
+                    let nameStarts1 = name1Lower.hasPrefix(lowerQuery)
+                    let nameStarts2 = name2Lower.hasPrefix(lowerQuery)
+                    if nameStarts1 && !nameStarts2 { return true }
+                    if nameStarts2 && !nameStarts1 { return false }
 
-                    if starts1 && !starts2 { return true }
-                    if starts2 && !starts1 { return false }
+                    // Then prioritize starts with in email
+                    let emailStarts1 = email1Lower.hasPrefix(lowerQuery)
+                    let emailStarts2 = email2Lower.hasPrefix(lowerQuery)
+                    if emailStarts1 && !emailStarts2 { return true }
+                    if emailStarts2 && !emailStarts1 { return false }
 
-                    // Otherwise alphabetical
+                    // Otherwise alphabetical by name
                     return name1Lower < name2Lower
                 }
 

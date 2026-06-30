@@ -29,11 +29,20 @@ class TripReportGenerator {
 
         // Process each expense
         for expense in expenses {
-            // Add amount to payer (they paid this amount)
-            balances[expense.paidByUID, default: 0] += expense.amount
+            // Calculate total unpaid splits for this expense
+            let unpaidSplits = expense.splits.filter { $0.isPaid != true }
+            let totalUnpaidAmount = unpaidSplits.reduce(0) { $0 + $1.amount }
 
-            // Subtract each person's share from their balance
+            // Only add to payer's balance if there are unpaid splits
+            if totalUnpaidAmount > 0 {
+                balances[expense.paidByUID, default: 0] += totalUnpaidAmount
+            }
+
+            // Subtract each person's share from their balance (ONLY if not paid)
             for split in expense.splits {
+                // Skip splits that are already paid
+                if split.isPaid == true { continue }
+
                 balances[split.uid, default: 0] -= split.amount
             }
         }
@@ -140,7 +149,7 @@ class TripReportGenerator {
             currentY = drawSectionTitle("Rekomendasi Pembayaran", in: pageRect, startY: currentY)
             currentY += 15
             let settlements = calculateSettlements(balances: balances, members: trip.members)
-            currentY = drawSettlementRecommendations(settlements: settlements, currency: trip.currency, in: pageRect, startY: currentY)
+            currentY = drawSettlementRecommendations(settlements: settlements, expenses: expenses, members: trip.members, currency: trip.currency, in: pageRect, startY: currentY)
             currentY += 30
 
             // MARK: - Expense List
@@ -236,10 +245,14 @@ class TripReportGenerator {
                 currentY = 40
             }
 
-            // MARK: - My Expenses
+            // MARK: - My Expenses (all expenses involving current user)
             currentY = drawSectionTitle("Pengeluaran Saya", in: pageRect, startY: currentY)
             currentY += 15
-            let myExpenses = expenses.filter { $0.paidByUID == currentUserUID }
+            // Show all expenses where user is payer OR is part of the split
+            let myExpenses = expenses.filter { expense in
+                expense.paidByUID == currentUserUID ||
+                expense.splits.contains(where: { $0.uid == currentUserUID })
+            }
             currentY = drawMyExpensesList(expenses: myExpenses, currency: trip.currency, in: pageRect, startY: currentY, context: context)
             currentY += 30
 
@@ -436,6 +449,66 @@ class TripReportGenerator {
 
         // Members count
         currentY = drawInfoRow(label: "Jumlah Anggota", value: "\(trip.members.count) orang", in: pageRect, startY: currentY)
+        currentY += 15
+
+        // Members list with roles
+        currentY = drawMembersList(members: trip.members, in: pageRect, startY: currentY)
+
+        return currentY
+    }
+
+    private static func drawMembersList(members: [TripMember], in pageRect: CGRect, startY: CGFloat) -> CGFloat {
+        var currentY = startY
+
+        let headerAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.boldSystemFont(ofSize: 10),
+            .foregroundColor: textSecondary
+        ]
+        "Daftar Anggota:".draw(at: CGPoint(x: 60, y: currentY), withAttributes: headerAttrs)
+        currentY += 18
+
+        // Sort members by role (owner first, then admin, then member)
+        let sortedMembers = members.sorted { m1, m2 in
+            let roleOrder: [TripMemberRole: Int] = [.owner: 0, .admin: 1, .member: 2, .pending: 3]
+            return (roleOrder[m1.role] ?? 4) < (roleOrder[m2.role] ?? 4)
+        }
+
+        for member in sortedMembers {
+            let roleText: String
+            let roleColor: UIColor
+
+            switch member.role {
+            case .owner:
+                roleText = "Owner"
+                roleColor = primaryColor
+            case .admin:
+                roleText = "Admin"
+                roleColor = accentColor
+            case .member:
+                roleText = "Anggota"
+                roleColor = textSecondary
+            case .pending:
+                roleText = "Pending"
+                roleColor = warningAmber
+            }
+
+            // Draw member name
+            let nameAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 11),
+                .foregroundColor: textPrimary
+            ]
+            "• \(member.displayName)".draw(at: CGPoint(x: 70, y: currentY), withAttributes: nameAttrs)
+
+            // Draw role badge
+            let roleAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 9),
+                .foregroundColor: roleColor
+            ]
+            let roleSize = roleText.size(withAttributes: roleAttrs)
+            roleText.draw(at: CGPoint(x: pageRect.width - 60 - roleSize.width, y: currentY + 1), withAttributes: roleAttrs)
+
+            currentY += 16
+        }
 
         return currentY
     }
@@ -512,7 +585,7 @@ class TripReportGenerator {
         return currentY
     }
 
-    private static func drawSettlementRecommendations(settlements: [(from: String, to: String, amount: Double)], currency: String, in pageRect: CGRect, startY: CGFloat) -> CGFloat {
+    private static func drawSettlementRecommendations(settlements: [(from: String, to: String, amount: Double)], expenses: [ExpenseModel], members: [TripMember], currency: String, in pageRect: CGRect, startY: CGFloat) -> CGFloat {
         var currentY = startY
 
         if settlements.isEmpty {
@@ -537,6 +610,41 @@ class TripReportGenerator {
                 valueColor: warningAmber,
                 valueBold: true
             )
+            currentY += 5
+
+            // Get expense details for this settlement
+            let debtorUID = members.first(where: { $0.displayName == settlement.from })?.uid
+            let creditorUID = members.first(where: { $0.displayName == settlement.to })?.uid
+
+            if let debtorUID = debtorUID, let creditorUID = creditorUID {
+                // Find expenses where creditor paid and debtor owes
+                let relatedExpenses = expenses.filter { expense in
+                    expense.paidByUID == creditorUID &&
+                    expense.splits.contains(where: { $0.uid == debtorUID })
+                }
+
+                if !relatedExpenses.isEmpty {
+                    let detailAttrs: [NSAttributedString.Key: Any] = [
+                        .font: UIFont.systemFont(ofSize: 9),
+                        .foregroundColor: textSecondary
+                    ]
+
+                    for expense in relatedExpenses.prefix(3) {
+                        if let split = expense.splits.first(where: { $0.uid == debtorUID }) {
+                            let detailText = "  • \(expense.title): \(formatCurrency(split.amount, symbol: currency))"
+                            detailText.draw(at: CGPoint(x: 70, y: currentY), withAttributes: detailAttrs)
+                            currentY += 12
+                        }
+                    }
+
+                    if relatedExpenses.count > 3 {
+                        let moreText = "  ...dan \(relatedExpenses.count - 3) expense lainnya"
+                        moreText.draw(at: CGPoint(x: 70, y: currentY), withAttributes: detailAttrs)
+                        currentY += 12
+                    }
+                }
+            }
+
             currentY += 8
         }
 
@@ -546,6 +654,7 @@ class TripReportGenerator {
     private static func drawExpenseList(expenses: [ExpenseModel], currency: String, in pageRect: CGRect, startY: CGFloat, context: UIGraphicsPDFRendererContext) -> CGFloat {
         var currentY = startY
         let pageHeight = pageRect.height
+        let bottomMargin: CGFloat = 60 // Space for footer
 
         if expenses.isEmpty {
             let emptyAttrs: [NSAttributedString.Key: Any] = [
@@ -561,8 +670,11 @@ class TripReportGenerator {
         dateFormatter.dateFormat = "dd MMM yyyy"
 
         for expense in expenses {
-            // Check if we need new page
-            if currentY > pageHeight - 100 {
+            // Calculate card height BEFORE drawing
+            let cardHeight = calculateExpenseCardHeight(expense: expense)
+
+            // Check if we need new page based on actual card height
+            if currentY + cardHeight + 12 > pageHeight - bottomMargin {
                 context.beginPage()
                 currentY = 40
             }
@@ -575,6 +687,25 @@ class TripReportGenerator {
         return currentY
     }
 
+    // Helper function to calculate expense card height without drawing
+    private static func calculateExpenseCardHeight(expense: ExpenseModel) -> CGFloat {
+        let baseHeight: CGFloat = 70
+        let participantRowHeight: CGFloat = 12
+        let itemRowHeight: CGFloat = 10
+
+        let participantCount = expense.splits.count
+        var totalItemsCount = 0
+        for split in expense.splits {
+            totalItemsCount += split.items.count
+        }
+
+        let participantSectionHeight: CGFloat = participantCount > 0
+            ? (CGFloat(participantCount) * participantRowHeight) + (CGFloat(totalItemsCount) * itemRowHeight) + 25
+            : 0
+
+        return baseHeight + participantSectionHeight
+    }
+
     private static func drawExpenseCard(expense: ExpenseModel, currency: String, dateFormatter: DateFormatter, in pageRect: CGRect, startY: CGFloat) -> CGFloat {
         var currentY = startY
         let cardPadding: CGFloat = 12
@@ -582,11 +713,28 @@ class TripReportGenerator {
         let rightMargin: CGFloat = 40
         let cardWidth = pageRect.width - leftMargin - rightMargin
 
+        // Calculate card height based on content
+        let participantCount = expense.splits.count
+        let baseHeight: CGFloat = 70
+        let participantRowHeight: CGFloat = 12
+
+        // Calculate total items across all splits
+        var totalItemsCount = 0
+        for split in expense.splits {
+            totalItemsCount += split.items.count
+        }
+        let itemRowHeight: CGFloat = 10
+
+        let participantSectionHeight: CGFloat = participantCount > 0
+            ? (CGFloat(participantCount) * participantRowHeight) + (CGFloat(totalItemsCount) * itemRowHeight) + 25
+            : 0
+        let totalCardHeight = baseHeight + participantSectionHeight
+
         // Calculate card height first
         let cardStartY = currentY
 
         // Draw card background
-        let cardRect = CGRect(x: leftMargin, y: cardStartY, width: cardWidth, height: 70)
+        let cardRect = CGRect(x: leftMargin, y: cardStartY, width: cardWidth, height: totalCardHeight)
         let cardPath = UIBezierPath(roundedRect: cardRect, cornerRadius: 10)
         surfaceElevated.setFill()
         cardPath.fill()
@@ -648,7 +796,68 @@ class TripReportGenerator {
             receiptText.draw(at: CGPoint(x: pageRect.width - rightMargin - cardPadding - receiptSize.width, y: currentY + 1), withAttributes: receiptAttrs)
         }
 
-        currentY += 20
+        currentY += 18
+
+        // MARK: - Participant Details Section
+        if !expense.splits.isEmpty {
+            // Divider line
+            let dividerPath = UIBezierPath()
+            dividerPath.move(to: CGPoint(x: leftMargin + cardPadding, y: currentY))
+            dividerPath.addLine(to: CGPoint(x: pageRect.width - rightMargin - cardPadding, y: currentY))
+            textSecondary.withAlphaComponent(0.3).setStroke()
+            dividerPath.lineWidth = 0.5
+            dividerPath.stroke()
+
+            currentY += 8
+
+            // Section header
+            let sectionHeaderAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.boldSystemFont(ofSize: 9),
+                .foregroundColor: textSecondary
+            ]
+            "Daftar Patungan:".draw(at: CGPoint(x: leftMargin + cardPadding, y: currentY), withAttributes: sectionHeaderAttrs)
+            currentY += 14
+
+            // Draw each participant
+            let participantNameAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 9),
+                .foregroundColor: textPrimary
+            ]
+
+            let participantAmountAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.boldSystemFont(ofSize: 9),
+                .foregroundColor: accentColor
+            ]
+
+            let itemAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 8),
+                .foregroundColor: textSecondary
+            ]
+
+            for split in expense.splits {
+                // Participant name with bullet
+                let nameText = "• \(split.displayName)"
+                nameText.draw(at: CGPoint(x: leftMargin + cardPadding + 5, y: currentY), withAttributes: participantNameAttrs)
+
+                // Amount on right
+                let splitAmountStr = formatCurrency(split.amount, symbol: currency)
+                let splitAmountSize = splitAmountStr.size(withAttributes: participantAmountAttrs)
+                splitAmountStr.draw(at: CGPoint(x: pageRect.width - rightMargin - cardPadding - splitAmountSize.width, y: currentY), withAttributes: participantAmountAttrs)
+
+                currentY += 12
+
+                // Show ALL items (no truncation)
+                if !split.items.isEmpty {
+                    for item in split.items {
+                        let itemText = "   • \(item)"
+                        itemText.draw(at: CGPoint(x: leftMargin + cardPadding + 10, y: currentY), withAttributes: itemAttrs)
+                        currentY += 10
+                    }
+                }
+            }
+        }
+
+        currentY += 8
 
         return currentY
     }
@@ -703,6 +912,7 @@ class TripReportGenerator {
     private static func drawMyExpensesList(expenses: [ExpenseModel], currency: String, in pageRect: CGRect, startY: CGFloat, context: UIGraphicsPDFRendererContext) -> CGFloat {
         var currentY = startY
         let pageHeight = pageRect.height
+        let bottomMargin: CGFloat = 60 // Space for footer
 
         if expenses.isEmpty {
             let emptyAttrs: [NSAttributedString.Key: Any] = [
@@ -718,8 +928,11 @@ class TripReportGenerator {
         dateFormatter.dateFormat = "dd MMM yyyy"
 
         for expense in expenses {
-            // Check if we need new page
-            if currentY > pageHeight - 100 {
+            // Calculate card height BEFORE drawing
+            let cardHeight = calculateExpenseCardHeight(expense: expense)
+
+            // Check if we need new page based on actual card height
+            if currentY + cardHeight + 12 > pageHeight - bottomMargin {
                 context.beginPage()
                 currentY = 40
             }

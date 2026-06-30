@@ -12,7 +12,7 @@ final class StorageService {
 
     // MARK: - Upload image
     /// Returns the public download URL string
-    func uploadImage(_ image: UIImage, path: String, compressionQuality: CGFloat = 0.75) async throws -> String {
+    func uploadImage(_ image: UIImage, path: String, compressionQuality: CGFloat = 0.3) async throws -> String {
         guard let data = image.jpegData(compressionQuality: compressionQuality) else {
             throw AppError.unknown("Image compression failed.")
         }

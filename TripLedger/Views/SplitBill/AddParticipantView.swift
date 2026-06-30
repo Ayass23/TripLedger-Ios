@@ -12,11 +12,16 @@ struct AddParticipantView: View {
         case fromFriends = "Dari Daftar Teman"
     }
 
+    struct ManualNameEntry: Identifiable {
+        let id = UUID()
+        var name: String
+    }
+
     @State private var selectedSource: ParticipantSource = .manual
-    @State private var manualNames: [String] = [""] // Start with one empty field
+    @State private var manualNames: [ManualNameEntry] = [ManualNameEntry(name: "")] // Start with one empty field
     @State private var searchQuery = ""
     @State private var selectedFriends: Set<String> = [] // UIDs
-    @FocusState private var focusedField: Int?
+    @FocusState private var focusedField: UUID?
 
     var body: some View {
         NavigationStack {
@@ -45,6 +50,7 @@ struct AddParticipantView: View {
                         fromFriendsView
                     }
                 }
+                .dismissKeyboardOnTap()
             }
             .navigationTitle("Tambah Peserta")
             .navigationBarTitleDisplayMode(.inline)
@@ -78,9 +84,9 @@ struct AddParticipantView: View {
                 }
 
                 // Auto focus to first field in manual mode
-                if selectedSource == .manual {
+                if selectedSource == .manual, let firstEntry = manualNames.first {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        focusedField = 0
+                        focusedField = firstEntry.id
                     }
                 }
             }
@@ -97,9 +103,9 @@ struct AddParticipantView: View {
                     }
 
                     // Auto focus when switching to manual
-                    if source == .manual {
+                    if source == .manual, let firstEntry = manualNames.first {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            focusedField = 0
+                            focusedField = firstEntry.id
                         }
                     }
                 } label: {
@@ -129,24 +135,20 @@ struct AddParticipantView: View {
                     .padding(.horizontal, 20)
 
                 VStack(spacing: 12) {
-                    ForEach(manualNames.indices, id: \.self) { index in
+                    ForEach(manualNames) { entry in
                         HStack(spacing: 12) {
-                            TextField("Nama peserta", text: $manualNames[index])
+                            TextField("Nama peserta", text: bindingForEntry(entry))
                                 .font(AppFont.subheadline())
                                 .foregroundColor(.textPrimary)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
                                 .background(Color.cardFallback)
                                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                                .focused($focusedField, equals: index)
+                                .focused($focusedField, equals: entry.id)
 
                             if manualNames.count > 1 {
                                 Button {
-                                    manualNames.remove(at: index)
-                                    // Adjust focus if needed
-                                    if focusedField == index {
-                                        focusedField = nil
-                                    }
+                                    removeEntry(id: entry.id)
                                 } label: {
                                     Image(systemName: "minus.circle.fill")
                                         .font(.system(size: 24))
@@ -160,10 +162,11 @@ struct AddParticipantView: View {
 
                 // Add More Button
                 Button {
-                    manualNames.append("")
+                    let newEntry = ManualNameEntry(name: "")
+                    manualNames.append(newEntry)
                     // Auto focus to the new field
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        focusedField = manualNames.count - 1
+                        focusedField = newEntry.id
                     }
                 } label: {
                     HStack(spacing: 8) {
@@ -242,9 +245,8 @@ struct AddParticipantView: View {
     // MARK: - Empty Friends State
     private var emptyFriendsState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "person.2")
+            Text("👥")
                 .font(.system(size: 48))
-                .foregroundColor(.textSecondary.opacity(0.3))
 
             Text(friendsVM.friends.isEmpty ? "Belum Ada Teman" : "Tidak Ditemukan")
                 .font(AppFont.headline())
@@ -280,18 +282,43 @@ struct AddParticipantView: View {
 
     private var canAddMore: Bool {
         // Can only add more if all current fields are filled
-        return !manualNames.contains(where: { $0.trimmingCharacters(in: .whitespaces).isEmpty })
+        return !manualNames.contains(where: { $0.name.trimmingCharacters(in: .whitespaces).isEmpty })
     }
 
     private var canConfirm: Bool {
         if selectedSource == .manual {
-            return manualNames.contains(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+            return manualNames.contains(where: { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty })
         } else {
             return !selectedFriends.isEmpty
         }
     }
 
     // MARK: - Actions
+    private func bindingForEntry(_ entry: ManualNameEntry) -> Binding<String> {
+        Binding<String>(
+            get: {
+                manualNames.first(where: { $0.id == entry.id })?.name ?? ""
+            },
+            set: { newValue in
+                if let index = manualNames.firstIndex(where: { $0.id == entry.id }) {
+                    manualNames[index].name = newValue
+                }
+            }
+        )
+    }
+
+    private func removeEntry(id: UUID) {
+        // Clear focus first to avoid race condition
+        focusedField = nil
+
+        // Delay removal to next run loop to let SwiftUI process focus change
+        DispatchQueue.main.async {
+            withAnimation {
+                manualNames.removeAll { $0.id == id }
+            }
+        }
+    }
+
     private func toggleFriendSelection(_ friend: UserModel) {
         if selectedFriends.contains(friend.uid) {
             selectedFriends.remove(friend.uid)
@@ -304,7 +331,7 @@ struct AddParticipantView: View {
         if selectedSource == .manual {
             // Add manual names
             let validNames = manualNames
-                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .map { $0.name.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
 
             for name in validNames {

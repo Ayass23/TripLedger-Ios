@@ -213,14 +213,37 @@ struct InviteMemberSheetView: View {
         let isSelected = selectedMembers.contains(user.uid)
         let isCurrentUser = user.uid == authVM.currentUser?.uid
         let isMember = trip.members.contains(where: { $0.uid == user.uid })
+        let isSuspended = user.isSuspended
 
         return HStack(spacing: 12) {
-            AvatarView(url: user.avatarURL, initials: user.initials, size: 40)
+            ZStack(alignment: .bottomTrailing) {
+                AvatarView(url: user.avatarURL, initials: user.initials, size: 40)
+                    .opacity(isSuspended ? 0.5 : 1.0)
+
+                if isSuspended {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.errorRed)
+                        .background(Circle().fill(Color.baseFallback).frame(width: 16, height: 16))
+                }
+            }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(user.displayName)
-                    .font(AppFont.subheadline())
-                    .foregroundColor(.textPrimary)
+                HStack(spacing: 6) {
+                    Text(user.displayName)
+                        .font(AppFont.subheadline())
+                        .foregroundColor(isSuspended ? .textPrimary.opacity(0.5) : .textPrimary)
+
+                    if isSuspended {
+                        Text("Ditangguhkan")
+                            .font(AppFont.caption2())
+                            .foregroundColor(.errorRed)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.errorRed.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                }
                 Text(user.email)
                     .font(AppFont.caption())
                     .foregroundColor(.textPrimary.opacity(0.4))
@@ -232,6 +255,11 @@ struct InviteMemberSheetView: View {
                 Text("Kamu")
                     .font(AppFont.caption2())
                     .foregroundColor(.textPrimary.opacity(0.4))
+            } else if isSuspended {
+                // Suspended users cannot be invited
+                Image(systemName: "nosign")
+                    .font(.system(size: 20))
+                    .foregroundColor(.errorRed.opacity(0.5))
             } else if isMember {
                 Text("Sudah Anggota")
                     .font(AppFont.caption2())

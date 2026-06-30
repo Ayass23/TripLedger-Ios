@@ -66,28 +66,11 @@ struct WelcomeView: View {
                 Spacer()
 
                 // Hero icon
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: "#A58CF4").opacity(0.15))
-                        .frame(width: 130, height: 130)
-                        .blur(radius: 20)
-
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "#8E6BFF"), Color(hex: "#A58CF4")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 100, height: 100)
-                        .shadow(color: Color(hex: "#8E6BFF").opacity(0.5), radius: 24)
-
-                    Image(systemName: "airplane.departure")
-                        .font(.system(size: 44, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                .padding(.bottom, 24)
+                Image("design1")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 150, height: 150)
+                    .padding(.bottom, 24)
 
                 // Title
                 Text("TripLedger")

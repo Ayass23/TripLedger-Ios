@@ -8,17 +8,12 @@ struct ExpenseDetailView: View {
     
     @State var expense: ExpenseModel
     let currency: String
-    
+
     @State private var showDeleteAlert = false
-    @State private var isEditing = false
     @State private var showFullScreenReceipt = false
     @State private var showPDFPreview = false
     @State private var pdfURL: URL?
     @State private var isGeneratingPDF = false
-
-    private var isOwner: Bool {
-        expense.paidByUID == authVM.currentUser?.uid
-    }
 
     private var paidAmount: Double {
         expense.splits.filter { $0.isPaid == true }.reduce(0) { $0 + $1.amount }
@@ -157,37 +152,15 @@ struct ExpenseDetailView: View {
 
                     // MARK: - Participants List
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Daftar Patungan")
-                                .font(AppFont.headline())
-                                .foregroundColor(.textPrimary)
-                            Spacer()
-                            if isOwner {
-                                Button {
-                                    withAnimation {
-                                        isEditing.toggle()
-                                    }
-                                } label: {
-                                    Text(isEditing ? "Selesai" : "Edit")
-                                        .font(AppFont.caption())
-                                        .foregroundColor(isEditing ? .white : .brandPrimary)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(isEditing ? Color.brandPrimary : Color.brandPrimary.opacity(0.15))
-                                        .clipShape(Capsule())
-                                }
-                            }
-                        }
+                        Text("Daftar Patungan")
+                            .font(AppFont.headline())
+                            .foregroundColor(.textPrimary)
 
                         VStack(spacing: 8) {
                             ForEach(expense.splits) { split in
                                 ExpenseParticipantRow(
                                     split: split,
-                                    expense: $expense,
-                                    currency: currency,
-                                    isOwner: isOwner,
-                                    isEditing: isEditing,
-                                    expenseVM: expenseVM
+                                    currency: currency
                                 )
                             }
                         }
@@ -328,82 +301,52 @@ struct ExpenseDetailView: View {
 // MARK: - Expense Participant Row
 struct ExpenseParticipantRow: View {
     let split: ExpenseSplit
-    @Binding var expense: ExpenseModel
     let currency: String
-    let isOwner: Bool
-    let isEditing: Bool
-    let expenseVM: ExpenseViewModel
-    
+
+    @State private var isExpanded = false
+
     var body: some View {
-        HStack {
-            ZStack {
-                Circle()
-                    .fill(Color.brandAccent.opacity(0.12))
-                    .frame(width: 40, height: 40)
-                let initial = String(split.displayName.prefix(1)).uppercased()
-                Text(initial)
-                    .font(AppFont.headline())
-                    .foregroundColor(.brandAccent)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(split.displayName)
-                    .font(AppFont.subheadline())
-                    .foregroundColor(.textPrimary)
-                Text(split.amount.toCurrency(symbol: currency))
-                    .font(AppFont.caption())
-                    .foregroundColor(.textPrimary.opacity(0.6))
-            }
-            
-            Spacer()
-            
-            if split.isPaid == true {
-                if isOwner && isEditing {
-                    Button {
-                        // Optimistic UI Update
-                        if let idx = expense.splits.firstIndex(where: { $0.id == split.id }) {
-                            expense.splits[idx].isPaid = false
-                        }
-                        
-                        Task {
-                            if let id = expense.id {
-                                await expenseVM.toggleExpenseSplitPaidStatus(expenseID: id, splitID: split.id, isPaid: false)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .foregroundColor(.errorRed)
-                            .font(.system(size: 24))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                ZStack {
+                    Circle()
+                        .fill(Color.brandAccent.opacity(0.12))
+                        .frame(width: 40, height: 40)
+                    let initial = String(split.displayName.prefix(1)).uppercased()
+                    Text(initial)
+                        .font(AppFont.headline())
+                        .foregroundColor(.brandAccent)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(split.displayName)
+                        .font(AppFont.subheadline())
+                        .foregroundColor(.textPrimary)
+                    Text(split.amount.toCurrency(symbol: currency))
+                        .font(AppFont.caption())
+                        .foregroundColor(.textPrimary.opacity(0.6))
+                }
+
+                Spacer()
+
+                // Expand/Collapse button
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isExpanded.toggle()
                     }
-                } else {
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
+                        .foregroundColor(.textPrimary.opacity(0.3))
+                        .font(.system(size: 20))
+                }
+
+                // Payment status indicator (read-only)
+                if split.isPaid == true {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.successGreen)
                         .font(.system(size: 24))
-                }
-            } else {
-                if isOwner {
-                    Button {
-                        // Optimistic UI Update
-                        if let idx = expense.splits.firstIndex(where: { $0.id == split.id }) {
-                            expense.splits[idx].isPaid = true
-                        }
-                        
-                        Task {
-                            if let id = expense.id {
-                                await expenseVM.toggleExpenseSplitPaidStatus(expenseID: id, splitID: split.id, isPaid: true)
-                            }
-                        }
-                    } label: {
-                        Text("Tandai Lunas")
-                            .font(AppFont.caption())
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.brandPrimary)
-                            .clipShape(Capsule())
-                    }
                 } else {
-                    Text("Belum")
+                    Text("Belum Lunas")
                         .font(AppFont.caption())
                         .foregroundColor(.warningAmber)
                         .padding(.horizontal, 12)
@@ -412,8 +355,63 @@ struct ExpenseParticipantRow: View {
                         .clipShape(Capsule())
                 }
             }
+            .padding(12)
+
+            // Expandable content - Item details
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    Divider()
+                        .padding(.horizontal, 12)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Rincian Item")
+                            .font(AppFont.caption())
+                            .foregroundColor(.textPrimary.opacity(0.6))
+                            .padding(.horizontal, 12)
+
+                        if !split.items.isEmpty {
+                            ForEach(split.items, id: \.self) { item in
+                                HStack(spacing: 6) {
+                                    Image(systemName: "circle.fill")
+                                        .font(.system(size: 4))
+                                        .foregroundColor(.textPrimary.opacity(0.4))
+                                    Text(item)
+                                        .font(AppFont.caption())
+                                        .foregroundColor(.textPrimary.opacity(0.7))
+                                        .lineLimit(2)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                            }
+                        } else {
+                            Text("Tidak ada rincian item")
+                                .font(AppFont.caption())
+                                .foregroundColor(.textPrimary.opacity(0.5))
+                                .italic()
+                                .padding(.horizontal, 12)
+                        }
+
+                        Divider()
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+
+                        HStack {
+                            Text("Total Bayar:")
+                                .font(AppFont.caption())
+                                .foregroundColor(.textPrimary.opacity(0.8))
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Text(split.amount.toCurrency(symbol: currency))
+                                .font(AppFont.caption())
+                                .foregroundColor(.brandPrimary)
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.horizontal, 12)
+                    }
+                    .padding(.bottom, 8)
+                }
+            }
         }
-        .padding(12)
         .background(Color.cardFallback)
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
     }

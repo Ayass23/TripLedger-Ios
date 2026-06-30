@@ -71,6 +71,7 @@ struct AllTripsView: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
         }
         .navigationTitle("Semua Trip")
         .navigationBarTitleDisplayMode(.inline)

@@ -63,12 +63,56 @@ final class AuthService {
 
     // MARK: - Reset Password
     func resetPassword(email: String) async throws {
+        // Firebase Auth doesn't reveal if email exists for security reasons
+        // So we need to check in Firestore first
+        let trimmedEmail = email.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Sign in anonymously to access Firestore (if not already signed in)
+        var signedInAnonymously = false
+        if auth.currentUser == nil {
+            do {
+                try await auth.signInAnonymously()
+                signedInAnonymously = true
+            } catch {
+                // If anonymous auth fails, just try sending reset email directly
+                // Firebase will handle invalid emails
+                try await auth.sendPasswordReset(withEmail: trimmedEmail)
+                return
+            }
+        }
+
+        // Ensure we sign out anonymous user when done
+        defer {
+            if signedInAnonymously {
+                try? auth.signOut()
+            }
+        }
+
+        // Check if email exists in users collection
         do {
-            try await auth.sendPasswordReset(withEmail: email)
-        } catch let error as NSError {
-            // Firebase Auth throws userNotFound when email is not registered
-            if error.code == AuthErrorCode.userNotFound.rawValue {
+            let snapshot = try await db.collection("users")
+                .whereField("email", isEqualTo: trimmedEmail)
+                .limit(to: 1)
+                .getDocuments()
+
+            guard !snapshot.documents.isEmpty else {
                 throw AppError.emailNotFound
+            }
+        } catch let error as NSError {
+            // Handle permission errors gracefully
+            if error.localizedDescription.contains("permission") ||
+               error.localizedDescription.contains("Permission") {
+                throw AppError.emailNotFound
+            }
+            throw error
+        }
+
+        // Email exists, proceed with password reset
+        do {
+            try await auth.sendPasswordReset(withEmail: trimmedEmail)
+        } catch let error as NSError {
+            if error.code == AuthErrorCode.invalidEmail.rawValue {
+                throw AppError.invalidEmail
             }
             throw error
         }

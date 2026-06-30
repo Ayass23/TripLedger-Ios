@@ -1,6 +1,7 @@
 import Foundation
 import Vision
 import UIKit
+import CoreImage
 
 // MARK: - OCR Result
 struct OCRResult {
@@ -30,9 +31,68 @@ final class OCRService {
     static let shared = OCRService()
     private init() {}
 
+    // MARK: - Preprocess Image for Better OCR
+    private func preprocessImage(_ image: UIImage) -> UIImage {
+        print("🔧 [OCRService] Preprocessing image...")
+
+        guard let ciImage = CIImage(image: image) else {
+            print("   ⚠️ Could not create CIImage, using original")
+            return image
+        }
+
+        let context = CIContext(options: nil)
+        var processedImage = ciImage
+
+        // 1. Auto-adjust orientation (fix rotation issues)
+        processedImage = processedImage.oriented(forExifOrientation: Int32(image.imageOrientation.rawValue))
+
+        // 2. Convert to grayscale for cleaner text recognition
+        if let grayscaleFilter = CIFilter(name: "CIPhotoEffectMono") {
+            grayscaleFilter.setValue(processedImage, forKey: kCIInputImageKey)
+            if let output = grayscaleFilter.outputImage {
+                processedImage = output
+                print("   ✓ Applied grayscale filter")
+            }
+        }
+
+        // 3. Increase contrast for sharper text
+        if let contrastFilter = CIFilter(name: "CIColorControls") {
+            contrastFilter.setValue(processedImage, forKey: kCIInputImageKey)
+            contrastFilter.setValue(1.1, forKey: kCIInputContrastKey)  // Slight contrast boost
+            contrastFilter.setValue(0.0, forKey: kCIInputSaturationKey)  // Keep grayscale
+            contrastFilter.setValue(0.05, forKey: kCIInputBrightnessKey)  // Slight brightness boost
+            if let output = contrastFilter.outputImage {
+                processedImage = output
+                print("   ✓ Applied contrast enhancement")
+            }
+        }
+
+        // 4. Sharpen edges for better text clarity
+        if let sharpenFilter = CIFilter(name: "CISharpenLuminance") {
+            sharpenFilter.setValue(processedImage, forKey: kCIInputImageKey)
+            sharpenFilter.setValue(0.4, forKey: kCIInputSharpnessKey)  // Moderate sharpening
+            if let output = sharpenFilter.outputImage {
+                processedImage = output
+                print("   ✓ Applied sharpening")
+            }
+        }
+
+        // Convert back to UIImage
+        if let cgImage = context.createCGImage(processedImage, from: processedImage.extent) {
+            print("   ✅ Preprocessing completed")
+            return UIImage(cgImage: cgImage)
+        }
+
+        print("   ⚠️ Could not create final image, using original")
+        return image
+    }
+
     // MARK: - Recognize text in image (async)
     func recognizeText(in image: UIImage) async throws -> OCRResult {
-        guard let cgImage = image.cgImage else {
+        // Preprocess image for better OCR accuracy
+        let processedImage = preprocessImage(image)
+
+        guard let cgImage = processedImage.cgImage else {
             throw AppError.unknown("Invalid image.")
         }
 
@@ -43,12 +103,39 @@ final class OCRService {
                     return
                 }
                 let observations = req.results as? [VNRecognizedTextObservation] ?? []
-                let lines = observations.compactMap { $0.topCandidates(1).first?.string }
+
+                // Get top 3 candidates for each observation and pick the best
+                let lines = observations.compactMap { observation -> String? in
+                    // Get multiple candidates and pick the one with highest confidence
+                    let candidates = observation.topCandidates(3)
+                    return candidates.first?.string
+                }
+
                 let fullText = lines.joined(separator: "\n")
                 continuation.resume(returning: OCRResult(fullText: fullText, lines: lines, parsedReceipt: nil))
             }
+
+            // Configure for maximum accuracy
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
+            request.recognitionLanguages = ["id-ID", "en-US"]  // Prioritize Indonesian
+            // Common Indonesian receipt words for better OCR accuracy
+            request.customWords = [
+                // Currency
+                "Rp", "IDR",
+                // Totals
+                "TOTAL", "SUBTOTAL", "GRAND", "JUMLAH", "BAYAR",
+                // Tax keywords (critical!)
+                "PPN", "PB1", "PB 1", "PAJAK", "TAX", "VAT", "PPn",
+                // Service
+                "SERVICE", "SERVIS", "SC",
+                // Discount
+                "DISKON", "DISC", "VOUCHER", "PROMO", "POTONGAN",
+                // Rounding
+                "PEMBULATAN", "BULAT", "ROUNDING", "SELISIH", "ADJ",
+                // Common items
+                "PLASTIK", "KANTONG", "SEDOTAN"
+            ]
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
             do {

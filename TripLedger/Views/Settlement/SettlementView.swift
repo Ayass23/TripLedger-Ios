@@ -212,6 +212,7 @@ struct SettlementView: View {
                     .disabled(proofImage == nil || debtVM.isLoading)
                 }
                 .padding(20)
+                .dismissKeyboardOnTap()
             }
             .navigationTitle("Upload Bukti Bayar")
             .navigationBarTitleDisplayMode(.inline)
@@ -241,14 +242,14 @@ struct SettlementView: View {
     private func statusIcon(_ s: SettlementStatus) -> String {
         switch s {
         case .pending: return "clock.fill"
-        case .verified: return "checkmark.seal.fill"
+        case .verified, .approved: return "checkmark.seal.fill"
         case .rejected: return "xmark.seal.fill"
         }
     }
     private func statusColor(_ s: SettlementStatus) -> Color {
         switch s {
         case .pending: return .warningAmber
-        case .verified: return .successGreen
+        case .verified, .approved: return .successGreen
         case .rejected: return .errorRed
         }
     }

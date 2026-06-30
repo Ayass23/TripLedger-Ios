@@ -26,12 +26,13 @@ struct UserModel: Identifiable, Codable {
     var bankInfo:       BankInfo?
     var role:           UserRole
     var isSuspended:    Bool
+    var suspendReason:  String?
     var fcmToken:       String?
     var createdAt:      Timestamp
     var friendUIDs:     [String]
 
     enum CodingKeys: String, CodingKey {
-        case id, uid, displayName, email, avatarURL, avatarPublicID, bankInfo, role, isSuspended, fcmToken, createdAt, friendUIDs
+        case id, uid, displayName, email, avatarURL, avatarPublicID, bankInfo, role, isSuspended, suspendReason, fcmToken, createdAt, friendUIDs
     }
 
     // Computed

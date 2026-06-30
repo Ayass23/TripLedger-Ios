@@ -286,6 +286,7 @@ struct RegisterView: View {
                 .autocorrectionDisabled()
                 .foregroundColor(.white)
                 .font(AppFont.body())
+                .tint(.white)
         }
         .padding(16)
         .background(Color.white.opacity(0.07))
@@ -326,6 +327,7 @@ private struct RegSecureFieldView: View {
             .foregroundColor(.white)
             .font(AppFont.body())
             .autocorrectionDisabled()
+            .tint(.white)
             Spacer()
             Button { isVisible.toggle() } label: {
                 Image(systemName: isVisible ? "eye.slash.fill" : "eye.fill")

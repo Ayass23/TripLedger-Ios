@@ -8,9 +8,10 @@ struct ParsedReceiptModel: Codable {
     var category: String?             // Kategori (Food, Transport, etc.)
     var items: [ReceiptItem]          // Item-item dalam struk
     var date: String?                 // Tanggal transaksi (optional)
-    var taxAmount: Double?            // Pajak (optional)
+    var taxAmount: Double?            // Pajak/PPN/PB1 (optional)
     var serviceCharge: Double?        // Service charge (optional)
     var discount: Double?             // Diskon (optional)
+    var rounding: Double?             // Pembulatan (optional) - bisa positif atau negatif
 
     var description: String {
         var desc = "Tagihan: \(billName)\n"
@@ -53,4 +54,5 @@ struct AIReceiptResponse: Codable {
     var taxAmount: Double?
     var serviceCharge: Double?
     var discount: Double?          // Diskon
+    var rounding: Double?          // Pembulatan (bisa positif atau negatif)
 }

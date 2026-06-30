@@ -10,6 +10,7 @@ struct ReportFriendSheet: View {
     @State private var selectedCategory: ReportCategory = .spam
     @State private var reason = ""
     @State private var isSubmitting = false
+    @State private var showSuccessAlert = false
 
     private var isValid: Bool {
         !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -165,6 +166,14 @@ struct ReportFriendSheet: View {
                     .disabled(!isValid || isSubmitting)
                 }
             }
+            .alert("Laporan Terkirim", isPresented: $showSuccessAlert) {
+                Button("OK") {
+                    isPresented = false
+                    onSuccess()
+                }
+            } message: {
+                Text("Laporan kamu telah dikirim ke admin untuk ditinjau. Kamu akan mendapat notifikasi saat laporan selesai ditinjau.")
+            }
         }
     }
 
@@ -198,8 +207,7 @@ struct ReportFriendSheet: View {
             try db.db.collection(Collection.reports).document(docRef.documentID).setData(from: report)
             print("✅ [ReportFriend] Report submitted for \(friend.displayName)")
 
-            isPresented = false
-            onSuccess()
+            showSuccessAlert = true
         } catch {
             print("❌ [ReportFriend] Error submitting report: \(error)")
         }

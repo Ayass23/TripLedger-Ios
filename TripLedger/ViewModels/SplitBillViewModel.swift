@@ -13,6 +13,10 @@ final class SplitBillViewModel: ObservableObject {
     private var ownerListener: ListenerRegistration?
     private var participantListener: ListenerRegistration?
 
+    // Temporary storage for combining results from both listeners
+    private var ownerBills: [SplitBillModel] = []
+    private var participantBills: [SplitBillModel] = []
+
     deinit {
         ownerListener?.remove()
         participantListener?.remove()
@@ -28,20 +32,19 @@ final class SplitBillViewModel: ObservableObject {
     }
 
     // MARK: - Listen to user's split bills (real-time)
-    // Listens to bills where user is owner (includes old bills without participantUIDs)
+    // Listens to bills where user is owner OR participant
     func listenSplitBills(uid: String) {
-        print("🔊 [SplitBillVM] Starting listener for bills owned by user (uid: \(uid))")
+        print("🔊 [SplitBillVM] Starting listeners for user (uid: \(uid))")
+        print("   🔑 User UID for participant query: '\(uid)'")
 
+        // Listener 1: Bills where user is owner (for backward compatibility)
         ownerListener = db.listen(collection: Collection.splitBills, queryBuilder: { ref in
-            // Use ownerUID for backward compatibility with old bills
             ref.whereField("ownerUID", isEqualTo: uid)
                .order(by: "createdAt", descending: true)
         }) { [weak self] (bills: [SplitBillModel]) in
-            print("📥 [SplitBillVM] Received \(bills.count) bills from owner listener")
-
-            // Log each bill for debugging
+            print("📥 [SplitBillVM] Owner listener received \(bills.count) bills")
             for bill in bills {
-                print("   📄 \(bill.title) - participantUIDs: \(bill.participantUIDs)")
+                print("   📄 Bill '\(bill.title)': participantUIDs = \(bill.participantUIDs)")
             }
 
             // Auto-migrate old bills: update participantUIDs if missing
@@ -49,8 +52,47 @@ final class SplitBillViewModel: ObservableObject {
                 await self?.migrateOldBills(bills)
             }
 
-            self?.splitBills = bills
+            self?.ownerBills = bills
+            self?.combineAndPublishBills()
         }
+
+        // Listener 2: Bills where user is participant (but not owner to avoid duplicates)
+        // Note: We don't use orderBy here to avoid needing a composite index
+        // Sorting is done in combineAndPublishBills() instead
+        print("🔍 [SplitBillVM] Setting up participant listener with arrayContains: '\(uid)'")
+        participantListener = db.listen(collection: Collection.splitBills, queryBuilder: { ref in
+            ref.whereField("participantUIDs", arrayContains: uid)
+        }) { [weak self] (bills: [SplitBillModel]) in
+            print("📥 [SplitBillVM] Participant listener received \(bills.count) bills (before filtering)")
+            for bill in bills {
+                print("   📄 Bill '\(bill.title)': ownerUID=\(bill.ownerUID), participantUIDs=\(bill.participantUIDs)")
+            }
+
+            // Filter out bills where user is owner (already handled by ownerListener)
+            let nonOwnerBills = bills.filter { $0.ownerUID != uid }
+            print("📥 [SplitBillVM] After filtering (excluding owner): \(nonOwnerBills.count) bills")
+
+            self?.participantBills = nonOwnerBills
+            self?.combineAndPublishBills()
+        }
+    }
+
+    // MARK: - Combine Bills from Both Listeners
+    private func combineAndPublishBills() {
+        // Combine owner bills and participant bills, remove duplicates by ID
+        var allBills = ownerBills
+        for bill in participantBills {
+            if !allBills.contains(where: { $0.id == bill.id }) {
+                allBills.append(bill)
+            }
+        }
+
+        // Sort by createdAt descending
+        allBills.sort { ($0.createdAt.dateValue() ?? Date.distantPast) > ($1.createdAt.dateValue() ?? Date.distantPast) }
+
+        print("📊 [SplitBillVM] Combined bills: \(allBills.count) (owner: \(ownerBills.count), participant: \(participantBills.count))")
+
+        self.splitBills = allBills
     }
 
     // MARK: - Migrate Old Bills
@@ -107,6 +149,16 @@ final class SplitBillViewModel: ObservableObject {
             participantUIDs.append(ownerUID)
         }
 
+        // Debug logging
+        print("🔍 [SplitBillVM] Creating split bill with participantUIDs:")
+        print("   📝 Title: \(title)")
+        print("   👤 Owner UID: \(ownerUID)")
+        print("   👥 All participants:")
+        for participant in participants {
+            print("      - \(participant.displayName): uid=\(participant.uid ?? "nil")")
+        }
+        print("   📋 Final participantUIDs array: \(participantUIDs)")
+
         let bill = SplitBillModel(
             ownerUID: ownerUID, ownerName: ownerName,
             ownerBankAccount: ownerBankAccount,
@@ -120,10 +172,14 @@ final class SplitBillViewModel: ObservableObject {
         )
         do {
             try db.db.collection(Collection.splitBills).document(docRef.documentID).setData(from: bill)
+            print("✅ [SplitBillVM] Split bill saved successfully!")
+            print("   📄 Document ID: \(docRef.documentID)")
+            print("   📋 Saved participantUIDs: \(participantUIDs)")
             var created = bill
             created.id = docRef.documentID
             return created
         } catch {
+            print("❌ [SplitBillVM] Failed to save split bill: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             return nil
         }

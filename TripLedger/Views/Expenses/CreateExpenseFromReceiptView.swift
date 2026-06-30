@@ -15,6 +15,7 @@ struct CreateExpenseFromReceiptView: View {
     @State private var step = 1
     @State private var showBankAccountAlert = false
     @State private var showEditBankView = false
+    @State private var showSuccessAlert = false
     @StateObject private var profileVM = ProfileViewModel()
 
     // Step 1: Info Dasar
@@ -29,6 +30,7 @@ struct CreateExpenseFromReceiptView: View {
     @State private var taxAmountStr = ""
     @State private var serviceChargeStr = ""
     @State private var discountStr = ""
+    @State private var roundingStr = ""
 
     private var totalAmount: Double {
         let cleaned = amountStr
@@ -62,6 +64,16 @@ struct CreateExpenseFromReceiptView: View {
             .trimmingCharacters(in: .whitespaces)
         return Double(cleaned) ?? 0
     }
+
+    private var rounding: Double {
+        let cleaned = roundingStr
+            .replacingOccurrences(of: ".", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        // Rounding can be negative (starts with -)
+        return Double(cleaned) ?? 0
+    }
+
     private var isStep1Valid: Bool { !title.isBlank && totalAmount > 0 }
 
     // Step 2: Participants
@@ -73,23 +85,27 @@ struct CreateExpenseFromReceiptView: View {
     }
     @State private var participants: [ParticipantEntry] = []
     @State private var paidByParticipant: ParticipantEntry?
+    @State private var suspendedMemberUIDs: Set<String> = []
 
     private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) && paidByParticipant != nil }
 
     // Step 3: Item-based Splits
-    struct ItemEntry: Identifiable, Hashable {
+    struct ItemEntry: Identifiable {
         let id = UUID()
         var name: String
         var price: Double
         var quantity: Int = 1
         var selectedParticipantIDs: Set<String> = []
+        var customSplits: [String: ParticipantSplitDetail] = [:]  // Custom split per participant
     }
     @State private var items: [ItemEntry] = []
     @State private var showEditItem: ItemEntry?
     @State private var showAddItem = false
+    @State private var showAturPembagian: ItemEntry?  // Item for custom split
     @State private var editingItemName = ""
     @State private var editingItemPrice = ""
     @State private var editingItemQuantity = 1
+    @State private var showDatePicker = false
 
     private var activeParticipants: [ParticipantEntry] { participants.filter { $0.isSelected } }
 
@@ -98,29 +114,56 @@ struct CreateExpenseFromReceiptView: View {
         var itemTotal: Double = 0
         for item in items {
             if item.selectedParticipantIDs.contains(participantID) {
-                let shareCount = item.selectedParticipantIDs.count
-                if shareCount > 0 {
-                    itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
+                // Check if custom split exists for this item and participant
+                if let customSplit = item.customSplits[participantID], !item.customSplits.isEmpty {
+                    itemTotal += customSplit.customAmount
+                } else {
+                    // Default: equal split
+                    let shareCount = item.selectedParticipantIDs.count
+                    if shareCount > 0 {
+                        itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
+                    }
                 }
             }
         }
+
+        // Add proportional tax, service charge, rounding, and subtract proportional discount
+        let itemsTotal = items.reduce(0.0) { $0 + ($1.price * Double($1.quantity)) }
+        if itemsTotal > 0 {
+            let proportion = itemTotal / itemsTotal
+            itemTotal += (taxAmount + serviceCharge + rounding) * proportion
+            itemTotal -= discount * proportion
+        }
+
         return itemTotal
     }
 
     private var calculatedTotal: Double {
         let itemsTotal = items.reduce(0.0) { $0 + ($1.price * Double($1.quantity)) }
-        // Add tax and service charge, subtract discount
-        return itemsTotal + taxAmount + serviceCharge - discount
+        // Add tax, service charge, rounding, subtract discount
+        return itemsTotal + taxAmount + serviceCharge + rounding - discount
     }
 
     private var isStep3Valid: Bool {
         !items.isEmpty &&
         items.allSatisfy { !$0.selectedParticipantIDs.isEmpty } &&
-        abs(calculatedTotal - totalAmount) < 0.01
+        abs(calculatedTotal - totalAmount) < 0.01 &&
+        allParticipantsHaveItems
     }
 
     private var isTotalMatching: Bool {
         abs(calculatedTotal - totalAmount) < 0.01
+    }
+
+    // Participants who don't have any items assigned
+    private var participantsWithoutItems: [ParticipantEntry] {
+        activeParticipants.filter { participant in
+            calculateParticipantAmount(participant.id) == 0
+        }
+    }
+
+    private var allParticipantsHaveItems: Bool {
+        participantsWithoutItems.isEmpty
     }
 
     var body: some View {
@@ -206,6 +249,11 @@ struct CreateExpenseFromReceiptView: View {
                     discountStr = String(Int(disc))
                     print("   🎫 Discount: \(disc)")
                 }
+                if let round = parsed.rounding {
+                    // Rounding can be negative
+                    roundingStr = String(Int(round))
+                    print("   🔄 Rounding: \(round)")
+                }
 
                 // Fill items for Step 3 (filter out items without price)
                 if !parsed.items.isEmpty {
@@ -248,23 +296,12 @@ struct CreateExpenseFromReceiptView: View {
                 print("   📦 Created default item for manual split")
             }
 
-            // Init Participants from trip members
-            if participants.isEmpty {
-                participants = trip.members.map { member in
-                    ParticipantEntry(id: UUID().uuidString, uid: member.uid, name: member.displayName, isSelected: true)
-                }
-                // Set default payer to current user, or first participant if current user not found
-                if let currentUser = authVM.currentUser {
-                    paidByParticipant = participants.first(where: { $0.uid == currentUser.uid })
-                }
-                // Fallback to first participant if payer still not set
-                if paidByParticipant == nil {
-                    paidByParticipant = participants.first
-                }
-                print("👥 [CreateExpenseFromReceiptView] Loaded \(participants.count) participants from trip")
-            }
-
             print("📋 [CreateExpenseFromReceiptView] Form initialized\n")
+        }
+        .task {
+            // Load suspended member UIDs first, then init participants
+            await loadSuspendedMembers()
+            initParticipants()
         }
         .onChange(of: totalAmount) { _ in
             // Update items if total changes and we only have the default item
@@ -288,17 +325,49 @@ struct CreateExpenseFromReceiptView: View {
             let formatted = newValue.formattedAsCurrency()
             if discountStr != formatted { discountStr = formatted }
         }
+        .onChange(of: roundingStr) { newValue in
+            // Rounding can be negative, so we need special handling
+            let isNegative = newValue.hasPrefix("-")
+            let cleanedForFormat = newValue.replacingOccurrences(of: "-", with: "")
+            let formatted = cleanedForFormat.formattedAsCurrency()
+            let finalValue = isNegative ? "-\(formatted)" : formatted
+            if roundingStr != finalValue { roundingStr = finalValue }
+        }
         .sheet(item: $showEditItem) { item in
             editItemSheet(item: item)
         }
         .sheet(isPresented: $showAddItem) {
             addItemSheet()
         }
+        .sheet(item: $showAturPembagian) { item in
+            aturPembagianSheet(item: item)
+        }
         .sheet(isPresented: $showEditBankView) {
             NavigationStack {
                 EditBankView(profileVM: profileVM)
                     .environmentObject(authVM)
             }
+        }
+        .sheet(isPresented: $showDatePicker) {
+            NavigationStack {
+                VStack {
+                    DatePicker("Pilih Tanggal", selection: $transactionDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .environment(\.locale, Locale(identifier: "id_ID"))
+                        .padding()
+                    Spacer()
+                }
+                .navigationTitle("Pilih Tanggal")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Selesai") {
+                            showDatePicker = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
         }
         .alert("Rekening Belum Diisi", isPresented: $showBankAccountAlert) {
             Button("Batal", role: .cancel) {
@@ -309,6 +378,13 @@ struct CreateExpenseFromReceiptView: View {
             }
         } message: {
             Text("Orang yang bayar dulu belum punya nomor rekening. Silakan isi rekening terlebih dahulu.")
+        }
+        .alert("Berhasil", isPresented: $showSuccessAlert) {
+            Button("OK") {
+                isAddingExpense = false
+            }
+        } message: {
+            Text("Pengeluaran berhasil disimpan!")
         }
         .tint(.brandPrimary)
         .onChange(of: showEditBankView) { isShowing in
@@ -392,28 +468,37 @@ struct CreateExpenseFromReceiptView: View {
                     .font(AppFont.subheadline())
                     .foregroundColor(.textPrimary.opacity(0.6))
 
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.warningAmber.opacity(0.15))
-                            .frame(width: 40, height: 40)
-                        Image(systemName: "calendar")
-                            .font(.system(size: 18))
-                            .foregroundColor(.warningAmber)
-                    }
+                Button {
+                    showDatePicker = true
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.warningAmber.opacity(0.15))
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "calendar")
+                                .font(.system(size: 18))
+                                .foregroundColor(.warningAmber)
+                        }
 
-                    DatePicker("", selection: $transactionDate, displayedComponents: .date)
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(formatTransactionDate(transactionDate))
+                            .font(AppFont.subheadline())
+                            .foregroundColor(.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14))
+                            .foregroundColor(.textPrimary.opacity(0.3))
+                    }
+                    .padding(14)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(Color.warningAmber.opacity(0.3), lineWidth: 1)
+                    )
                 }
-                .padding(14)
-                .background(Color.cardFallback)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .stroke(Color.warningAmber.opacity(0.3), lineWidth: 1)
-                )
+                .buttonStyle(.plain)
             }
 
             // Kategori
@@ -500,27 +585,50 @@ struct CreateExpenseFromReceiptView: View {
 
             VStack(spacing: 12) {
                 ForEach($participants) { $participant in
+                    let isSuspended = suspendedMemberUIDs.contains(participant.uid)
+
                     Button {
-                        participant.isSelected.toggle()
+                        if !isSuspended {
+                            participant.isSelected.toggle()
+                        }
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: participant.isSelected ? "checkmark.square.fill" : "square")
-                                .foregroundColor(participant.isSelected ? .brandPrimary : .textPrimary.opacity(0.3))
-                                .font(.system(size: 22))
+                            if isSuspended {
+                                Image(systemName: "nosign")
+                                    .foregroundColor(.errorRed.opacity(0.5))
+                                    .font(.system(size: 22))
+                            } else {
+                                Image(systemName: participant.isSelected ? "checkmark.square.fill" : "square")
+                                    .foregroundColor(participant.isSelected ? .brandPrimary : .textPrimary.opacity(0.3))
+                                    .font(.system(size: 22))
+                            }
 
                             ZStack {
                                 Circle()
-                                    .fill(Color.brandAccent.opacity(0.12))
+                                    .fill(isSuspended ? Color.errorRed.opacity(0.12) : Color.brandAccent.opacity(0.12))
                                     .frame(width: 36, height: 36)
                                 Text(String(participant.name.prefix(1)).uppercased())
                                     .font(AppFont.caption())
-                                    .foregroundColor(.brandAccent)
+                                    .foregroundColor(isSuspended ? .errorRed : .brandAccent)
                             }
+                            .opacity(isSuspended ? 0.5 : 1.0)
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(participant.name)
-                                    .font(AppFont.subheadline())
-                                    .foregroundColor(.textPrimary)
+                                HStack(spacing: 6) {
+                                    Text(participant.name)
+                                        .font(AppFont.subheadline())
+                                        .foregroundColor(isSuspended ? .textPrimary.opacity(0.5) : .textPrimary)
+
+                                    if isSuspended {
+                                        Text("Ditangguhkan")
+                                            .font(AppFont.caption2())
+                                            .foregroundColor(.errorRed)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.errorRed.opacity(0.15))
+                                            .clipShape(Capsule())
+                                    }
+                                }
                                 if participant.uid == authVM.currentUser?.uid {
                                     Text("Kamu")
                                         .font(AppFont.caption2())
@@ -534,10 +642,11 @@ struct CreateExpenseFromReceiptView: View {
                         .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                         .overlay(
                             RoundedRectangle(cornerRadius: AppRadius.md)
-                                .stroke(participant.isSelected ? Color.brandPrimary : Color.borderSoft, lineWidth: 1)
+                                .stroke(isSuspended ? Color.errorRed.opacity(0.3) : (participant.isSelected ? Color.brandPrimary : Color.borderSoft), lineWidth: 1)
                         )
                     }
                     .buttonStyle(.plain)
+                    .disabled(isSuspended)
                 }
             }
 
@@ -556,7 +665,8 @@ struct CreateExpenseFromReceiptView: View {
                 }
 
                 VStack(spacing: 12) {
-                    ForEach(participants.filter { $0.isSelected }) { participant in
+                    // Only show non-suspended selected participants as potential payers
+                    ForEach(participants.filter { $0.isSelected && !suspendedMemberUIDs.contains($0.uid) }) { participant in
                         Button {
                             paidByParticipant = participant
                         } label: {
@@ -668,6 +778,8 @@ struct CreateExpenseFromReceiptView: View {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         if item.selectedParticipantIDs.contains(participant.id) {
                                             item.selectedParticipantIDs.remove(participant.id)
+                                            // Also remove from custom splits
+                                            item.customSplits.removeValue(forKey: participant.id)
                                         } else {
                                             item.selectedParticipantIDs.insert(participant.id)
                                         }
@@ -687,6 +799,31 @@ struct CreateExpenseFromReceiptView: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+                        }
+
+                        // Atur Pembagian Button (only show if more than 1 participant)
+                        if item.selectedParticipantIDs.count > 1 {
+                            Button {
+                                showAturPembagian = item
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(.system(size: 14))
+                                    Text("Atur Pembagian")
+                                        .font(AppFont.caption())
+                                        .fontWeight(.medium)
+                                }
+                                .foregroundColor(.brandAccent)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.brandAccent.opacity(0.1))
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.brandAccent.opacity(0.3), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(16)
@@ -826,9 +963,14 @@ struct CreateExpenseFromReceiptView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Diskon")
-                                .font(AppFont.caption())
-                                .foregroundColor(.textPrimary.opacity(0.6))
+                            HStack(spacing: 4) {
+                                Text("Diskon")
+                                    .font(AppFont.caption())
+                                    .foregroundColor(.textPrimary.opacity(0.6))
+                                Text("(cth: 10000)")
+                                    .font(AppFont.caption2())
+                                    .foregroundColor(.textPrimary.opacity(0.4))
+                            }
                             TextField("0", text: $discountStr)
                                 .keyboardType(.decimalPad)
                                 .font(AppFont.subheadline())
@@ -853,6 +995,52 @@ struct CreateExpenseFromReceiptView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: AppRadius.md)
                             .stroke(discountStr.isEmpty ? Color.borderSoft : Color.successGreen.opacity(0.3), lineWidth: 1)
+                    )
+
+                    // Rounding (Pembulatan)
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.textSecondary.opacity(0.15))
+                                .frame(width: 36, height: 36)
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.system(size: 16))
+                                .foregroundColor(.textSecondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 4) {
+                                Text("Pembulatan")
+                                    .font(AppFont.caption())
+                                    .foregroundColor(.textPrimary.opacity(0.6))
+                                Text("(bisa - atau +)")
+                                    .font(AppFont.caption2())
+                                    .foregroundColor(.textPrimary.opacity(0.4))
+                            }
+                            TextField("0", text: $roundingStr)
+                                .keyboardType(.numbersAndPunctuation)
+                                .font(AppFont.subheadline())
+                                .foregroundColor(.textPrimary)
+                        }
+
+                        Spacer()
+
+                        if !roundingStr.isEmpty {
+                            Button {
+                                roundingStr = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.textPrimary.opacity(0.3))
+                                    .font(.system(size: 22))
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(roundingStr.isEmpty ? Color.borderSoft : Color.textSecondary.opacity(0.3), lineWidth: 1)
                     )
                 }
 
@@ -944,6 +1132,20 @@ struct CreateExpenseFromReceiptView: View {
                         .padding(.vertical, 2)
                     }
 
+                    // Rounding (if any)
+                    if rounding != 0 {
+                        HStack {
+                            Text("Pembulatan")
+                                .font(AppFont.caption())
+                                .foregroundColor(.textPrimary.opacity(0.6))
+                            Spacer()
+                            Text((rounding >= 0 ? "+ " : "- ") + abs(rounding).toCurrency(symbol: currency))
+                                .font(AppFont.caption())
+                                .foregroundColor(.textPrimary.opacity(0.6))
+                        }
+                        .padding(.vertical, 2)
+                    }
+
                     Divider()
                         .padding(.vertical, 4)
 
@@ -979,6 +1181,25 @@ struct CreateExpenseFromReceiptView: View {
                                 .font(AppFont.caption2())
                         }
                         .foregroundColor(.errorRed)
+                        .padding(.top, 4)
+                    }
+
+                    // Warning if some participants don't have items
+                    if !participantsWithoutItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "person.fill.xmark")
+                                    .font(.system(size: 12))
+                                Text("Peserta berikut belum punya item:")
+                                    .font(AppFont.caption2())
+                            }
+                            .foregroundColor(.errorRed)
+
+                            Text(participantsWithoutItems.map { $0.name }.joined(separator: ", "))
+                                .font(AppFont.caption2())
+                                .fontWeight(.medium)
+                                .foregroundColor(.errorRed)
+                        }
                         .padding(.top, 4)
                     }
                 }
@@ -1145,13 +1366,42 @@ struct CreateExpenseFromReceiptView: View {
             let splitAmount = calculateParticipantAmount(p.id)
             guard splitAmount > 0 else { return nil }
 
-            print("   👤 \(p.name): \(currency) \(splitAmount)")
+            // Get items for this participant
+            var participantItems: [String] = []
+            for item in items {
+                if item.selectedParticipantIDs.contains(p.id) {
+                    let shareCount = item.selectedParticipantIDs.count
+                    let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
+
+                    // Check if custom split exists
+                    if let customSplit = item.customSplits[p.id], !item.customSplits.isEmpty {
+                        let itemStr = "\(qtyPrefix)\(item.name) - \(customSplit.customAmount.toCurrency(symbol: currency))"
+                        participantItems.append(itemStr)
+                    } else if shareCount > 1 {
+                        // Shared item
+                        let shareAmount = (item.price * Double(item.quantity)) / Double(shareCount)
+                        let itemStr = "\(qtyPrefix)\(item.name) (1/\(shareCount)) - \(shareAmount.toCurrency(symbol: currency))"
+                        participantItems.append(itemStr)
+                    } else {
+                        // Solo item
+                        let itemTotal = item.price * Double(item.quantity)
+                        let itemStr = "\(qtyPrefix)\(item.name) - \(itemTotal.toCurrency(symbol: currency))"
+                        participantItems.append(itemStr)
+                    }
+                }
+            }
+
+            // Payer's split is automatically marked as paid (they paid for everyone)
+            let isPayerSplit = p.uid == paidByParticipant?.uid
+
+            print("   👤 \(p.name): \(currency) \(splitAmount) - \(participantItems.count) items - isPaid: \(isPayerSplit)")
             return ExpenseSplit(
                 id: p.id,
                 uid: p.uid,
                 displayName: p.name,
                 amount: splitAmount,
-                items: []
+                items: participantItems,
+                isPaid: isPayerSplit ? true : nil
             )
         }
 
@@ -1186,6 +1436,7 @@ struct CreateExpenseFromReceiptView: View {
 
         await expenseVM.addExpense(
             tripID: trip.id ?? "",
+            tripName: trip.name,
             title: title,
             amount: calculatedTotal,
             currency: currency,
@@ -1197,11 +1448,12 @@ struct CreateExpenseFromReceiptView: View {
             members: trip.members,
             customSplits: finalSplits,
             notes: finalNotes.trimmingCharacters(in: .whitespacesAndNewlines),
-            receiptImage: receiptImage
+            receiptImage: receiptImage,
+            transactionDate: transactionDate
         )
 
         print("✅ [CreateExpenseFromReceiptView] Expense saved successfully!")
-        isAddingExpense = false
+        showSuccessAlert = true
     }
 
     // MARK: - Helper: Parse Date
@@ -1215,6 +1467,14 @@ struct CreateExpenseFromReceiptView: View {
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
+        formatter.locale = Locale(identifier: "id_ID")
+        return formatter.string(from: date)
+    }
+
+    // MARK: - Helper: Format Transaction Date (Full format with day)
+    private func formatTransactionDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, d MMMM yyyy"
         formatter.locale = Locale(identifier: "id_ID")
         return formatter.string(from: date)
     }
@@ -1248,7 +1508,7 @@ struct CreateExpenseFromReceiptView: View {
                     Button("Simpan") {
                         if let index = items.firstIndex(where: { $0.id == item.id }) {
                             items[index].name = editingItemName.trimmed
-                            items[index].price = Double(editingItemPrice.replacingOccurrences(of: ",", with: "")) ?? 0
+                            items[index].price = Double(editingItemPrice.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: "")) ?? 0
                             items[index].quantity = editingItemQuantity
                         }
                         showEditItem = nil
@@ -1287,7 +1547,7 @@ struct CreateExpenseFromReceiptView: View {
                     Button("Tambah") {
                         let newItem = ItemEntry(
                             name: editingItemName.trimmed,
-                            price: Double(editingItemPrice.replacingOccurrences(of: ",", with: "")) ?? 0,
+                            price: Double(editingItemPrice.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: "")) ?? 0,
                             quantity: editingItemQuantity
                         )
                         items.append(newItem)
@@ -1301,5 +1561,89 @@ struct CreateExpenseFromReceiptView: View {
             }
         }
         .presentationDetents([.medium])
+    }
+
+    // MARK: - Atur Pembagian Sheet
+    @ViewBuilder
+    private func aturPembagianSheet(item: ItemEntry) -> some View {
+        let selectedParticipants = activeParticipants.filter { item.selectedParticipantIDs.contains($0.id) }
+        let participantTuples = selectedParticipants.map { (id: $0.id, name: $0.name) }
+
+        AturPembagianView(
+            itemName: item.name,
+            itemPrice: item.price * Double(item.quantity),
+            itemQuantity: item.quantity,
+            currency: currency,
+            participants: participantTuples,
+            onSave: { splits in
+                // Update the item's custom splits
+                if let index = items.firstIndex(where: { $0.id == item.id }) {
+                    items[index].customSplits = splits
+
+                    // Remove participants with 0 portion from selectedParticipantIDs
+                    for (participantId, split) in splits {
+                        if split.portion == 0 {
+                            items[index].selectedParticipantIDs.remove(participantId)
+                            items[index].customSplits.removeValue(forKey: participantId)
+                            print("🔴 [CreateExpenseFromReceiptView] Removed \(split.name) from \(item.name) (0 porsi)")
+                        } else {
+                            print("   👤 \(split.name): \(split.portion) porsi = \(currency) \(Int(split.customAmount))")
+                        }
+                    }
+                    print("✅ [CreateExpenseFromReceiptView] Custom splits saved for \(item.name)")
+                }
+            }
+        )
+    }
+
+    // MARK: - Load Suspended Members
+    private func loadSuspendedMembers() async {
+        let memberUIDs = trip.memberUIDs
+        guard !memberUIDs.isEmpty else { return }
+
+        do {
+            let db = FirestoreService.shared.db
+            let snapshot = try await db.collection(Collection.users)
+                .whereField("uid", in: memberUIDs)
+                .getDocuments()
+
+            let suspended = snapshot.documents.compactMap { doc -> String? in
+                guard let user = try? doc.data(as: UserModel.self),
+                      user.isSuspended else { return nil }
+                return user.uid
+            }
+
+            suspendedMemberUIDs = Set(suspended)
+        } catch {
+            print("Error loading suspended members: \(error)")
+        }
+    }
+
+    // MARK: - Init Participants
+    private func initParticipants() {
+        guard participants.isEmpty else { return }
+
+        // Include all members, but suspended users are not selected by default
+        participants = trip.members.map { member in
+            let isSuspended = suspendedMemberUIDs.contains(member.uid)
+            return ParticipantEntry(
+                id: UUID().uuidString,
+                uid: member.uid,
+                name: member.displayName,
+                isSelected: !isSuspended  // Suspended users not selected by default
+            )
+        }
+
+        // Set default payer to current user (if not suspended), or first non-suspended participant
+        if let currentUser = authVM.currentUser,
+           !suspendedMemberUIDs.contains(currentUser.uid) {
+            paidByParticipant = participants.first(where: { $0.uid == currentUser.uid })
+        }
+        // Fallback to first non-suspended participant if payer still not set
+        if paidByParticipant == nil {
+            paidByParticipant = participants.first(where: { !suspendedMemberUIDs.contains($0.uid) })
+        }
+
+        print("👥 [CreateExpenseFromReceiptView] Loaded \(participants.count) participants from trip")
     }
 }

@@ -29,6 +29,7 @@ final class ExpenseViewModel: ObservableObject {
     // MARK: - Add expense (manual)
     func addExpense(
         tripID:            String,
+        tripName:          String? = nil,
         title:             String,
         amount:            Double,
         currency:          String,
@@ -40,7 +41,8 @@ final class ExpenseViewModel: ObservableObject {
         members:           [TripMember],
         customSplits:      [ExpenseSplit] = [],
         notes:             String? = nil,
-        receiptImage:      UIImage? = nil
+        receiptImage:      UIImage? = nil,
+        transactionDate:   Date? = nil
     ) async {
         isLoading = true
         defer { isLoading = false }
@@ -53,7 +55,7 @@ final class ExpenseViewModel: ObservableObject {
             category: category, paidByUID: paidByUID, paidByName: paidByName,
             paidByBankAccount: paidByBankAccount,
             splitType: splitType, splits: splits, notes: notes,
-            receiptURL: nil, createdAt: Timestamp(date: Date()), updatedAt: nil
+            receiptURL: nil, createdAt: Timestamp(date: transactionDate ?? Date()), updatedAt: nil
         )
 
         do {
@@ -63,8 +65,69 @@ final class ExpenseViewModel: ObservableObject {
                 expense.receiptURL = url
             }
             try db.db.collection(Collection.expenses).document(docRef.documentID).setData(from: expense)
+
+            // Send notifications to participants (except payer)
+            await sendExpenseNotifications(
+                expenseID: docRef.documentID,
+                tripID: tripID,
+                tripName: tripName,
+                expenseTitle: title,
+                amount: amount,
+                currency: currency,
+                paidByUID: paidByUID,
+                paidByName: paidByName,
+                splits: splits
+            )
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Send Expense Notifications
+    private func sendExpenseNotifications(
+        expenseID: String,
+        tripID: String,
+        tripName: String?,
+        expenseTitle: String,
+        amount: Double,
+        currency: String,
+        paidByUID: String,
+        paidByName: String,
+        splits: [ExpenseSplit]
+    ) async {
+        // Get trip name if not provided
+        var finalTripName = tripName ?? ""
+        if finalTripName.isEmpty {
+            do {
+                let tripDoc = try await db.db.collection(Collection.trips).document(tripID).getDocument()
+                if let trip = try? tripDoc.data(as: TripModel.self) {
+                    finalTripName = trip.name
+                }
+            } catch {
+                print("⚠️ [ExpenseVM] Could not fetch trip name: \(error)")
+            }
+        }
+
+        // Send notification to each participant (except payer)
+        for split in splits where split.uid != paidByUID {
+            let notification = NotificationModel(
+                recipientUID: split.uid,
+                type: .expenseAdded,
+                title: "Pengeluaran Baru",
+                body: "\(paidByName) menambahkan \"\(expenseTitle)\" di trip \(finalTripName). Bagianmu: \(split.amount.toCurrency(symbol: currency))",
+                isRead: false,
+                referenceID: expenseID,
+                senderUID: paidByUID,
+                senderName: paidByName,
+                createdAt: Timestamp(date: Date())
+            )
+
+            do {
+                try await db.db.collection(Collection.notifications).addDocument(from: notification)
+                print("✅ [ExpenseVM] Notification sent to \(split.displayName)")
+            } catch {
+                print("⚠️ [ExpenseVM] Failed to send notification to \(split.displayName): \(error)")
+            }
         }
     }
 

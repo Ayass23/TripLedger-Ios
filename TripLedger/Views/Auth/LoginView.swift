@@ -168,11 +168,6 @@ struct LoginView: View {
             authVM.clearErrors()
         }
         .sheet(isPresented: $showForgot) { forgotPasswordSheet }
-        .alert("Akun Disuspend", isPresented: $authVM.showSuspendedAlert) {
-            Button("Tutup", role: .cancel) { }
-        } message: {
-            Text("Akun kamu telah disuspend oleh admin.\n\nSilakan hubungi admin untuk informasi lebih lanjut atau ajukan banding.")
-        }
         .tint(.brandPrimary)
         .preferredColorScheme(.dark)
     }
@@ -408,6 +403,7 @@ struct LoginView: View {
                 .autocorrectionDisabled()
                 .foregroundColor(.white)
                 .font(AppFont.body())
+                .tint(.white)
         }
         .padding(16)
         .background(Color.white.opacity(0.07))
@@ -444,6 +440,7 @@ private struct LoginSecureFieldView: View {
             .foregroundColor(.white)
             .font(AppFont.body())
             .autocorrectionDisabled()
+            .tint(.white)
             Spacer()
             Button { isVisible.toggle() } label: {
                 Image(systemName: isVisible ? "eye.slash.fill" : "eye.fill")

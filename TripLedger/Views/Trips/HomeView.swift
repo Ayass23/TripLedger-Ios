@@ -72,14 +72,19 @@ struct HomeView: View {
                 await fetchTripPendingExpenses()
             }
         }
+        .refreshable {
+            // Pull to refresh - reload pending expenses
+            // Split bills are updated via real-time listener automatically
+            await fetchTripPendingExpenses()
+        }
     }
 
     // MARK: - Pending Bills (from split bills & expenses)
     private var allPendingItems: [PendingBillItem] {
         guard let uid = authVM.currentUser?.uid else { return [] }
-        
+
         var items: [PendingBillItem] = []
-        
+
         // 1. Unpaid Split Bills
         let pendingSplits = splitBillVM.activeBills.filter { bill in
             // Cek apakah user saat ini ada di daftar partisipan (berdasarkan uid ATAU id) dan belum lunas
@@ -89,21 +94,46 @@ struct HomeView: View {
             return false
         }
         items.append(contentsOf: pendingSplits.map { .splitBill($0) })
-        
-        // 2. Unpaid Trip Expenses
+
+        // 2. Unpaid Trip Expenses - Accumulated by Trip
+        // PENTING: Exclude expenses where current user is the payer (yang menalangi tidak punya hutang)
         let pendingExpenses = tripPendingExpenses.filter { exp in
+            // Skip if current user is the one who paid (they don't owe themselves)
+            if exp.paidByUID == uid { return false }
+
+            // Check if user has unpaid split in this expense
             if let mySplit = exp.splits.first(where: { $0.uid == uid || $0.id == uid }) {
                 return mySplit.isPaid != true // jika nil atau false, berarti belum lunas
             }
             return false
         }
-        
-        // Map to PendingBillItem, finding the tripName for context
-        for exp in pendingExpenses {
-            let tripName = tripVM.activeTrips.first(where: { $0.id == exp.tripID })?.name ?? "Unknown Trip"
-            items.append(.expense(exp, tripName: tripName))
+
+        // Group expenses by tripID
+        let groupedByTrip = Dictionary(grouping: pendingExpenses) { $0.tripID }
+
+        // Create accumulated trip debt items
+        for (tripID, expenses) in groupedByTrip {
+            guard let trip = tripVM.activeTrips.first(where: { $0.id == tripID }) else { continue }
+
+            // Calculate total debt for this user in this trip
+            let totalDebt = expenses.reduce(0.0) { total, expense in
+                if let mySplit = expense.splits.first(where: { $0.uid == uid || $0.id == uid }) {
+                    return total + mySplit.amount
+                }
+                return total
+            }
+
+            items.append(.tripAccumulated(
+                tripID: tripID,
+                tripName: trip.name,
+                tripEmoji: trip.coverEmoji,
+                totalDebt: totalDebt,
+                currency: trip.currency,
+                expenseCount: expenses.count,
+                expenses: expenses
+            ))
         }
-        
+
         // Urutkan berdasarkan yang paling baru
         return items.sorted { $0.createdAt.dateValue() > $1.createdAt.dateValue() }
     }
@@ -217,6 +247,14 @@ struct HomeView: View {
                                             PendingBillCard(item: item)
                                         }
                                         .buttonStyle(.plain)
+                                } else if let tripData = item.underlyingTripAccumulated {
+                                    // Navigate to TripDetailView for accumulated trip debts
+                                    if let trip = tripVM.activeTrips.first(where: { $0.id == tripData.tripID }) {
+                                        NavigationLink(destination: TripDetailView(trip: trip)) {
+                                            TripDebtCard(item: item)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 } else if let expense = item.underlyingExpense {
                                     // Find trip currency (fallback to IDR)
                                     let tripCurrency = tripVM.activeTrips.first(where: { $0.id == expense.tripID })?.currency ?? "IDR"
@@ -251,16 +289,14 @@ struct HomeView: View {
 
                 Spacer()
 
-                if (tripVM.plannedTrips.count + tripVM.activeTrips.count + tripVM.historyTrips.count) > maxTripsOnHome {
-                    NavigationLink(destination: AllTripsView()) {
-                        HStack(spacing: 4) {
-                            Text("See All")
-                                .font(AppFont.caption())
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 10, weight: .semibold))
-                        }
-                        .foregroundColor(.brandAccent)
+                NavigationLink(destination: AllTripsView()) {
+                    HStack(spacing: 4) {
+                        Text("Lihat Semua")
+                            .font(AppFont.caption())
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
                     }
+                    .foregroundColor(.brandAccent)
                 }
             }
             .padding(.horizontal, 20)
@@ -311,20 +347,21 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Pending Bill Card (horizontal scroll)
+// MARK: - Pending Bill Card (horizontal scroll - for Split Bills)
 struct PendingBillCard: View {
     let item: PendingBillItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header: Icon + Title
             HStack(spacing: 10) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.warningAmber.opacity(0.12))
-                        .frame(width: 38, height: 38)
-                    Image(systemName: "exclamationmark.circle.fill")
+                        .fill(Color.brandAccent.opacity(0.12))
+                        .frame(width: 42, height: 42)
+                    Image(systemName: "rectangle.split.3x1.fill")
                         .font(.system(size: 18))
-                        .foregroundColor(.warningAmber)
+                        .foregroundColor(.brandAccent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title)
@@ -335,38 +372,119 @@ struct PendingBillCard: View {
                         .font(AppFont.caption())
                         .foregroundColor(.textPrimary.opacity(0.45))
                 }
-            }
-
-            HStack {
-                Text(item.amount.toCurrency(symbol: item.currency))
-                    .font(AppFont.title3())
-                    .foregroundColor(.brandPrimary)
                 Spacer()
-                Text(item.createdAt.dateValue().timeAgo())
-                    .font(AppFont.caption2())
-                    .foregroundColor(.textPrimary.opacity(0.3))
             }
 
-            // Progress bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.textPrimary.opacity(0.08))
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(LinearGradient.brandGradient)
-                        .frame(width: geo.size.width * item.progressRatio)
+            // Amount Section
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Total Tagihan")
+                        .font(AppFont.caption2())
+                        .foregroundColor(.textPrimary.opacity(0.5))
+                    Text(item.amount.toCurrency(symbol: item.currency))
+                        .font(AppFont.title3())
+                        .fontWeight(.semibold)
+                        .foregroundColor(.errorRed)
                 }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.textPrimary.opacity(0.25))
             }
-            .frame(height: 5)
-            
-            // Subtitle indicating context
-            Text(item.typeLabel)
-                .font(AppFont.caption2())
-                .foregroundColor(.textPrimary.opacity(0.5))
-                .padding(.top, 2)
+
+            // Type Badge
+            HStack(spacing: 4) {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 10))
+                Text("Split Bill")
+                    .font(AppFont.caption2())
+            }
+            .foregroundColor(.brandAccent)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.brandAccent.opacity(0.12))
+            .clipShape(Capsule())
         }
         .padding(16)
-        .frame(width: 240)
+        .frame(width: 220, height: 150)
+        .background(Color.cardFallback)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+        .shadow(color: .black.opacity(0.06), radius: 8, y: 3)
+    }
+}
+
+// MARK: - Trip Debt Card (for accumulated trip debts)
+struct TripDebtCard: View {
+    let item: PendingBillItem
+
+    private var tripEmoji: String {
+        if case .tripAccumulated(_, _, let emoji, _, _, _, _) = item {
+            return emoji
+        }
+        return "✈️"
+    }
+
+    private var expenseCount: Int {
+        if case .tripAccumulated(_, _, _, _, _, let count, _) = item {
+            return count
+        }
+        return 0
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header: Emoji + Title
+            HStack(spacing: 10) {
+                Text(tripEmoji)
+                    .font(.system(size: 22))
+                    .frame(width: 42, height: 42)
+                    .background(Color.brandPrimary.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .font(AppFont.headline())
+                        .foregroundColor(.textPrimary)
+                        .lineLimit(1)
+                    Text("\(expenseCount) pengeluaran")
+                        .font(AppFont.caption())
+                        .foregroundColor(.textPrimary.opacity(0.45))
+                }
+                Spacer()
+            }
+
+            // Amount Section
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Total Hutang")
+                        .font(AppFont.caption2())
+                        .foregroundColor(.textPrimary.opacity(0.5))
+                    Text(item.amount.toCurrency(symbol: item.currency))
+                        .font(AppFont.title3())
+                        .fontWeight(.semibold)
+                        .foregroundColor(.errorRed)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.textPrimary.opacity(0.25))
+            }
+
+            // Type Badge
+            HStack(spacing: 4) {
+                Image(systemName: "airplane")
+                    .font(.system(size: 10))
+                Text("Trip")
+                    .font(AppFont.caption2())
+            }
+            .foregroundColor(.brandPrimary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.brandPrimary.opacity(0.12))
+            .clipShape(Capsule())
+        }
+        .padding(16)
+        .frame(width: 220, height: 150)
         .background(Color.cardFallback)
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
         .shadow(color: .black.opacity(0.06), radius: 8, y: 3)

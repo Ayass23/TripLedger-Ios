@@ -69,6 +69,9 @@ struct FriendsView: View {
                 Text("DAFTAR TEMAN")
                     .font(AppFont.title1())
                     .foregroundColor(.brandPrimary)
+                Text("Kelola dan tambahkan teman untuk patungan")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textSecondary)
             }
             Spacer()
         }
@@ -84,7 +87,7 @@ struct FriendsView: View {
                 .font(.system(size: 15))
                 .foregroundColor(.textSecondary)
 
-            TextField("Cari nama atau email", text: $searchQuery)
+            TextField("Cari teman berdasarkan nama atau email..", text: $searchQuery)
                 .font(AppFont.subheadline())
                 .foregroundColor(.textPrimary)
 
@@ -147,9 +150,8 @@ struct FriendsView: View {
     // MARK: - Empty States
     private var emptyFriendsView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "person.2")
+            Text("👥")
                 .font(.system(size: 64))
-                .foregroundColor(.textSecondary.opacity(0.3))
 
             Text("Belum Ada Teman")
                 .font(AppFont.headline())

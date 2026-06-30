@@ -14,6 +14,7 @@ enum Collection {
     static let invites      = "tripInvites"
     static let splitBills   = "splitBills"
     static let reports      = "reports"
+    static let appeals      = "accountAppeals"
 }
 
 // MARK: - Firestore Service (generic CRUD)
@@ -66,7 +67,11 @@ final class FirestoreService {
         let ref: Query = queryBuilder?(db.collection(collection)) ?? db.collection(collection)
         return ref.addSnapshotListener { snap, error in
             if let error = error {
-                print("❌ [FirestoreService] Listener error for \(collection): \(error.localizedDescription)")
+                print("❌ [FirestoreService] Listener error for \(collection)")
+                print("   Error Code: \((error as NSError).code)")
+                print("   Error Domain: \((error as NSError).domain)")
+                print("   Description: \(error.localizedDescription)")
+                print("   Full Error: \(error)")
                 onChange([])
                 return
             }

@@ -14,6 +14,7 @@ struct SplitBillView: View {
     @State private var showScanThenCreate = false
     @State private var selectedReceiptImage: UIImage?
     @State private var scannedResult: OCRResult?
+    @State private var searchText = ""
 
     var body: some View {
         NavigationStack {
@@ -32,19 +33,68 @@ struct SplitBillView: View {
 
                         // MARK: Split Bills List
                         if !splitBillVM.splitBills.isEmpty {
-                            sectionHeader("Daftar Split Bill", count: splitBillVM.splitBills.count)
-                            LazyVStack(spacing: 12) {
-                                ForEach(splitBillVM.splitBills) { bill in
-                                    NavigationLink(destination: SplitBillDetailView(bill: bill)
-                                        .environmentObject(authVM)
-                                        .environmentObject(splitBillVM)) {
-                                        SplitBillCard(bill: bill)
+                            sectionHeader("Daftar Split Bill", count: filteredSplitBills.count)
+
+                            // Search Bar
+                            HStack(spacing: 10) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.textPrimary.opacity(0.4))
+
+                                TextField("Cari split bill...", text: $searchText)
+                                    .font(AppFont.subheadline())
+                                    .foregroundColor(.textPrimary)
+
+                                if !searchText.isEmpty {
+                                    Button {
+                                        searchText = ""
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.textPrimary.opacity(0.4))
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(Color.cardFallback)
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppRadius.md)
+                                    .stroke(Color.borderSoft, lineWidth: 1)
+                            )
                             .padding(.horizontal, 20)
-                            .padding(.bottom, 20)
+                            .padding(.bottom, 12)
+
+                            if filteredSplitBills.isEmpty {
+                                // No search results
+                                VStack(spacing: 12) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 36))
+                                        .foregroundColor(.textPrimary.opacity(0.2))
+                                    Text("Tidak ada hasil")
+                                        .font(AppFont.headline())
+                                        .foregroundColor(.textPrimary.opacity(0.6))
+                                    Text("Coba kata kunci lain")
+                                        .font(AppFont.footnote())
+                                        .foregroundColor(.textPrimary.opacity(0.35))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 40)
+                            } else {
+                                LazyVStack(spacing: 12) {
+                                    ForEach(filteredSplitBills) { bill in
+                                        NavigationLink(destination: SplitBillDetailView(bill: bill)
+                                            .environmentObject(authVM)
+                                            .environmentObject(splitBillVM)) {
+                                            SplitBillCard(bill: bill)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 20)
+                            }
                         } else {
                             // MARK: Empty State
                             emptyState
@@ -52,6 +102,9 @@ struct SplitBillView: View {
 
                         Spacer().frame(height: 40)
                     }
+                }
+                .onTapGesture {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             }
             .navigationBarHidden(true)
@@ -120,6 +173,16 @@ struct SplitBillView: View {
         }
     }
 
+    // MARK: - Filtered Split Bills
+    private var filteredSplitBills: [SplitBillModel] {
+        if searchText.isEmpty {
+            return splitBillVM.splitBills
+        }
+        return splitBillVM.splitBills.filter { bill in
+            bill.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
     // MARK: - Header
     private var headerSection: some View {
         HStack {
@@ -127,6 +190,9 @@ struct SplitBillView: View {
                 Text("SPLIT BILL")
                     .font(AppFont.title1())
                     .foregroundColor(.brandPrimary)
+                Text("Bagi tagihan dengan teman secara adil")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textSecondary)
             }
             Spacer()
         }

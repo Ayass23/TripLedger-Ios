@@ -40,7 +40,7 @@ struct AddFriendView: View {
                             .font(.system(size: 15))
                             .foregroundColor(.textSecondary)
 
-                        TextField("Cari nama atau email", text: $searchQuery)
+                        TextField("Cari orang berdasarkan nama atau email...", text: $searchQuery)
                             .font(AppFont.subheadline())
                             .foregroundColor(.textPrimary)
                             .textInputAutocapitalization(.never)
@@ -366,7 +366,16 @@ struct SearchResultRow: View {
     let incomingRequests: [FriendRequest]
     let onTap: () -> Void
 
+    private var isSuspended: Bool {
+        user.isSuspended
+    }
+
     private var relationshipStatus: RelationshipStatus {
+        // Check if suspended first
+        if isSuspended {
+            return .suspended
+        }
+
         // Check if already friends
         if currentUserFriends.contains(user.uid) {
             return .friend
@@ -389,49 +398,71 @@ struct SearchResultRow: View {
         case friend
         case pendingOutgoing    // We sent request to them
         case pendingIncoming    // They sent request to us
+        case suspended          // User is suspended
         case none
+    }
+
+    private var isDisabled: Bool {
+        relationshipStatus != .none
     }
 
     var body: some View {
         Button {
-            // Only allow selection if no relationship exists
+            // Only allow selection if no relationship exists and not suspended
             if relationshipStatus == .none {
                 onTap()
             }
         } label: {
             HStack(spacing: 12) {
-                // Checkbox
-                ZStack {
-                    Circle()
-                        .stroke(
-                            relationshipStatus == .none ?
-                                (isSelected ? Color.brandPrimary : Color.textSecondary.opacity(0.3)) :
-                                Color.textSecondary.opacity(0.2),
-                            lineWidth: 2
-                        )
+                // Checkbox or nosign for suspended
+                if isSuspended {
+                    Image(systemName: "nosign")
+                        .font(.system(size: 20))
+                        .foregroundColor(.errorRed.opacity(0.5))
                         .frame(width: 24, height: 24)
-
-                    if isSelected && relationshipStatus == .none {
+                } else {
+                    ZStack {
                         Circle()
-                            .fill(Color.brandPrimary)
+                            .stroke(
+                                relationshipStatus == .none ?
+                                    (isSelected ? Color.brandPrimary : Color.textSecondary.opacity(0.3)) :
+                                    Color.textSecondary.opacity(0.2),
+                                lineWidth: 2
+                            )
                             .frame(width: 24, height: 24)
 
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
+                        if isSelected && relationshipStatus == .none {
+                            Circle()
+                                .fill(Color.brandPrimary)
+                                .frame(width: 24, height: 24)
+
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                        }
                     }
                 }
 
                 // Avatar
-                ZStack {
-                    Circle()
-                        .fill(Color.brandPrimary.opacity(0.15))
-                        .frame(width: 44, height: 44)
+                ZStack(alignment: .bottomTrailing) {
+                    ZStack {
+                        Circle()
+                            .fill(isSuspended ? Color.errorRed.opacity(0.15) : Color.brandPrimary.opacity(0.15))
+                            .frame(width: 44, height: 44)
 
-                    Text(user.displayName.prefix(1).uppercased())
-                        .font(AppFont.headline())
-                        .foregroundColor(.brandPrimary)
-                        .fontWeight(.bold)
+                        Text(user.displayName.prefix(1).uppercased())
+                            .font(AppFont.headline())
+                            .foregroundColor(isSuspended ? .errorRed : .brandPrimary)
+                            .fontWeight(.bold)
+                    }
+                    .opacity(isSuspended ? 0.5 : 1.0)
+
+                    if isSuspended {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.errorRed)
+                            .background(Circle().fill(Color.baseFallback).frame(width: 16, height: 16))
+                    }
                 }
 
                 // Info
@@ -439,11 +470,22 @@ struct SearchResultRow: View {
                     Text(user.displayName)
                         .font(AppFont.subheadline())
                         .fontWeight(.semibold)
-                        .foregroundColor(.textPrimary)
+                        .foregroundColor(isSuspended ? .textPrimary.opacity(0.5) : .textPrimary)
 
                     Text(user.email)
                         .font(AppFont.caption2())
                         .foregroundColor(.textSecondary)
+
+                    if isSuspended {
+                        Text("Ditangguhkan")
+                            .font(AppFont.caption2())
+                            .foregroundColor(.errorRed)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.errorRed.opacity(0.15))
+                            .clipShape(Capsule())
+                            .padding(.top, 2)
+                    }
                 }
 
                 Spacer()
@@ -474,27 +516,30 @@ struct SearchResultRow: View {
                         .background(Color.brandPrimary.opacity(0.15))
                         .clipShape(Capsule())
                 }
+                // Note: suspended badge is shown inline with name, not here
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .background(
-                relationshipStatus == .none ?
+                isSuspended ? Color.cardFallback.opacity(0.5) :
+                (relationshipStatus == .none ?
                     (isSelected ? Color.brandPrimary.opacity(0.05) : Color.cardFallback) :
-                    Color.cardFallback.opacity(0.5)
+                    Color.cardFallback.opacity(0.5))
             )
             .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(
-                        isSelected && relationshipStatus == .none ?
+                        isSuspended ? Color.errorRed.opacity(0.3) :
+                        (isSelected && relationshipStatus == .none ?
                             Color.brandPrimary.opacity(0.3) :
-                            Color.clear,
+                            Color.clear),
                         lineWidth: 1
                     )
             )
-            .opacity(relationshipStatus != .none ? 0.6 : 1.0)
+            .opacity(isDisabled ? 0.6 : 1.0)
         }
-        .disabled(relationshipStatus != .none)
+        .disabled(isDisabled)
     }
 }
 

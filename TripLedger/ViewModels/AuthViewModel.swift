@@ -11,6 +11,8 @@ final class AuthViewModel: ObservableObject {
     @Published var isLoading       = false
     @Published var errorMessage:   String?
     @Published var showSuspendedAlert = false
+    @Published var suspendReason: String?
+    @Published var suspendedUserInfo: (uid: String, name: String, email: String)?
 
     private let authService = AuthService.shared
     private var authListener: AuthStateDidChangeListenerHandle?
@@ -29,18 +31,51 @@ final class AuthViewModel: ObservableObject {
     private func listenToAuthState() {
         authListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             guard let self else { return }
+
             Task { @MainActor in
                 if let uid = user?.uid {
-                    do {
-                        self.currentUser    = try await AuthService.shared.fetchUser(uid: uid)
+                    // If we already have the currentUser from login/register flow, skip fetch
+                    if self.currentUser != nil && self.currentUser?.uid == uid {
                         self.isAuthenticated = true
-                    } catch {
-                        self.errorMessage   = error.localizedDescription
-                        self.isAuthenticated = false
+                        self.isCheckingSession = false
+                        return
+                    }
+
+                    // Retry mechanism for fetching user (handles race condition after register)
+                    var retryCount = 0
+                    let maxRetries = 3
+                    var fetchedUser: UserModel? = nil
+
+                    while retryCount < maxRetries && fetchedUser == nil {
+                        do {
+                            fetchedUser = try await AuthService.shared.fetchUser(uid: uid)
+                        } catch {
+                            retryCount += 1
+                            if retryCount < maxRetries {
+                                // Wait a bit before retrying (document might not be ready)
+                                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                            }
+                        }
+                    }
+
+                    if let user = fetchedUser {
+                        self.currentUser = user
+                        self.isAuthenticated = true
+                        self.errorMessage = nil
+                    } else {
+                        // Only show error if we haven't set currentUser from login/register
+                        if self.currentUser == nil {
+                            self.errorMessage = "Gagal memuat data pengguna. Silakan coba lagi."
+                            self.isAuthenticated = false
+                        }
                     }
                 } else {
                     self.currentUser     = nil
                     self.isAuthenticated = false
+                    // Only clear error if not showing suspend alert (preserve suspend state)
+                    if !self.showSuspendedAlert {
+                        self.errorMessage = nil
+                    }
                 }
                 self.isCheckingSession = false
             }
@@ -51,7 +86,6 @@ final class AuthViewModel: ObservableObject {
     func register(name: String, email: String, password: String) async {
         isLoading     = true
         errorMessage  = nil
-        showSuspendedAlert = false
         defer { isLoading = false }
         do {
             let user = try await authService.signUp(name: name, email: email, password: password)
@@ -73,10 +107,27 @@ final class AuthViewModel: ObservableObject {
     func login(email: String, password: String) async {
         isLoading    = true
         errorMessage = nil
-        showSuspendedAlert = false
         defer { isLoading = false }
         do {
             let user = try await authService.signIn(email: email, password: password)
+
+            // Check if user is suspended
+            if user.isSuspended {
+                print("⚠️ [AuthVM] User is suspended during login")
+
+                // Set suspend info FIRST before logout
+                suspendReason = user.suspendReason ?? "Akun Anda telah disuspend oleh admin."
+                suspendedUserInfo = (uid: user.uid, name: user.displayName, email: user.email)
+                showSuspendedAlert = true
+
+                print("📝 [AuthVM] Suspend reason set: \(suspendReason ?? "nil")")
+
+                // Logout after setting suspend info
+                try? authService.signOut()
+
+                return
+            }
+
             currentUser     = user
             isAuthenticated = true
         } catch {
@@ -155,6 +206,6 @@ final class AuthViewModel: ObservableObject {
     // MARK: - Clear errors
     func clearErrors() {
         errorMessage = nil
-        showSuspendedAlert = false
+        // Don't reset showSuspendedAlert here - it's managed separately
     }
 }

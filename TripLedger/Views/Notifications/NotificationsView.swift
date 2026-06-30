@@ -13,6 +13,11 @@ struct NotificationsView: View {
     @State private var selectedInvite: TripInvite?
     @State private var showNotificationDetail = false
 
+    // Settlement verification
+    @State private var selectedSettlement: Settlement?
+    @State private var showSettlementVerification = false
+    @StateObject private var settlementVM = SettlementViewModel()
+
     // SECTION 1: Undangan (Invites + Pending Friend Requests)
     private var invitationItems: [UnreadItem] {
         var items: [UnreadItem] = []
@@ -114,10 +119,7 @@ struct NotificationsView: View {
                                 ForEach(regularNotifications) { notif in
                                     NotifRow(notif: notif, forceShowIndicator: false)
                                         .onTapGesture {
-                                            selectedNotification = notif
-                                            selectedNotificationID = notif.id
-                                            print("📱 [NotifView] Tapped regular notification - ID: \(notif.id ?? "nil")")
-                                            showNotificationDetail = true
+                                            handleNotificationTap(notif)
                                         }
                                 }
                             }
@@ -158,6 +160,58 @@ struct NotificationsView: View {
                 .environmentObject(authVM)
                 .environmentObject(tripVM)
             }
+        }
+        .navigationDestination(isPresented: $showSettlementVerification) {
+            if let settlement = selectedSettlement {
+                SettlementVerificationView(
+                    settlementVM: settlementVM,
+                    settlement: settlement
+                )
+                .environmentObject(authVM)
+            }
+        }
+    }
+
+    // MARK: - Handle Notification Tap
+    private func handleNotificationTap(_ notif: NotificationModel) {
+        // Only navigate to SettlementVerificationView for settlementProof (pending verification)
+        if notif.type == .settlementProof {
+            Task {
+                await fetchAndShowSettlement(notif: notif)
+            }
+        } else {
+            // Regular notification handling (including paymentVerified & paymentRejected)
+            // paymentRejected will show rejection reason in body message
+            selectedNotification = notif
+            selectedNotificationID = notif.id
+            print("📱 [NotifView] Tapped regular notification - ID: \(notif.id ?? "nil")")
+            showNotificationDetail = true
+        }
+    }
+
+    private func fetchAndShowSettlement(notif: NotificationModel) async {
+        guard let settlementID = notif.referenceID else {
+            print("❌ [NotifView] No referenceID for settlement notification")
+            return
+        }
+
+        do {
+            let settlement: Settlement = try await FirestoreService.shared.fetch(
+                collection: Collection.settlements,
+                documentID: settlementID
+            )
+
+            await MainActor.run {
+                selectedSettlement = settlement
+                showSettlementVerification = true
+            }
+
+            // Mark notification as read
+            if let notifID = notif.id {
+                await notifVM.markAsRead(notificationID: notifID)
+            }
+        } catch {
+            print("❌ [NotifView] Failed to fetch settlement: \(error)")
         }
     }
 
@@ -457,11 +511,13 @@ struct NotificationDetailSheet: View {
                 print("📋 [NotificationDetail] Type: \(notification.type.rawValue)")
 
                 // Mark as read when sheet appears - EXCEPT for actionable invitations
-                // ONLY pending friend requests (title = "Permintaan Pertemanan") should stay "unread" until action is taken
-                // "Permintaan Diterima" and other informational notifications should be marked as read
+                // Skip auto mark-as-read for:
+                // 1. Pending friend requests (title = "Permintaan Pertemanan")
+                // 2. Trip invites (type = tripInvite BUT NOT "Anggota Baru Bergabung")
                 let isPendingFriendRequest = notification.type == .friendRequest && notification.title == "Permintaan Pertemanan"
+                let isActionableTripInvite = notification.type == .tripInvite && notification.title != "Anggota Baru Bergabung"
 
-                if !isPendingFriendRequest && notification.type != .tripInvite {
+                if !isPendingFriendRequest && !isActionableTripInvite {
                     Task {
                         if let id = notificationID ?? notification.id {
                             await notifVM.markAsRead(notificationID: id)

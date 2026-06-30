@@ -15,6 +15,8 @@ struct EditTripView: View {
     @State private var endDate: Date = Date()
     @State private var isSaving = false
     @State private var showSuccessAlert = false
+    @State private var showErrorAlert = false
+    @State private var errorMessage = ""
 
     private let emojiOptions = ["🏝️","🏔️","🌆","🚢","🎡","🌴","🗺️","✈️","🏕️","🌊"]
     private let currencies   = ["IDR","USD","EUR","SGD","MYR","JPY","AUD"]
@@ -84,6 +86,7 @@ struct EditTripView: View {
                                     Spacer()
 
                                     DatePicker("", selection: $startDate, in: Date()..., displayedComponents: .date)
+                                        .datePickerStyle(.compact)
                                         .labelsHidden()
                                         .tint(.brandPrimary)
                                         .onChange(of: startDate) { newVal in
@@ -114,6 +117,7 @@ struct EditTripView: View {
                                     Spacer()
 
                                     DatePicker("", selection: $endDate, in: startDate..., displayedComponents: .date)
+                                        .datePickerStyle(.compact)
                                         .labelsHidden()
                                         .tint(.brandPrimary)
                                 }
@@ -126,9 +130,6 @@ struct EditTripView: View {
                                     .stroke(Color.borderSoft, lineWidth: 1)
                             )
                         }
-
-                        // Mata Uang
-                        currencyPickerSection
 
                         // Save button
                         Button {
@@ -169,6 +170,11 @@ struct EditTripView: View {
                 }
             } message: {
                 Text("Informasi trip telah diperbarui.")
+            }
+            .alert("Gagal Memperbarui", isPresented: $showErrorAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
             }
             .tint(.brandPrimary)
         }
@@ -276,8 +282,11 @@ struct EditTripView: View {
             endDate: endDate
         )
 
-        // Show success alert if no error
-        if tripVM.errorMessage == nil {
+        // Show success or error alert
+        if let error = tripVM.errorMessage {
+            errorMessage = error
+            showErrorAlert = true
+        } else {
             showSuccessAlert = true
         }
     }

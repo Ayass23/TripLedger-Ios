@@ -1,5 +1,7 @@
 import SwiftUI
+import UIKit
 import FirebaseCore
+import FirebaseFirestore
 
 struct AddExpenseView: View {
     @Environment(\.dismiss)          var dismiss
@@ -15,6 +17,8 @@ struct AddExpenseView: View {
     @State private var step = 1
     @State private var showBankAccountAlert = false
     @State private var showEditBankView = false
+    @State private var showPostTripAlert = false
+    @State private var showSuccessAlert = false
     @StateObject private var profileVM = ProfileViewModel()
 
     // Step 1: Info
@@ -22,12 +26,27 @@ struct AddExpenseView: View {
     @State private var amountStr  = ""
     @State private var category   = ExpenseCategory.food
     @State private var notes      = ""
-    @State private var showImagePicker = false
+    @State private var transactionDate = Date()
+    @State private var showDatePicker = false
+    @State private var showPhotoSourcePicker = false
+    @State private var showCameraPicker = false
+    @State private var showGalleryPicker = false
     @State private var selectedImage: UIImage? = nil
     
-    private var amount: Double { Double(amountStr.replacingOccurrences(of: ",", with: "")) ?? 0 }
+    private var amount: Double {
+        // Remove both "." (thousand separator) and "," (decimal separator if any) for parsing
+        let cleaned = amountStr
+            .replacingOccurrences(of: ".", with: "")
+            .replacingOccurrences(of: ",", with: "")
+        return Double(cleaned) ?? 0
+    }
     private var isStep1Valid: Bool  { !title.isBlank && amount > 0 }
-    
+
+    private var isTripEnded: Bool {
+        guard let endDate = trip.endDate?.dateValue() else { return false }
+        return Date() > Calendar.current.date(byAdding: .day, value: 1, to: endDate) ?? endDate
+    }
+
     // Step 2: Participants
     struct ParticipantEntry: Identifiable, Equatable {
         let id: String
@@ -41,19 +60,30 @@ struct AddExpenseView: View {
     private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) && paidByParticipant != nil }
 
     // Step 3: Item-based Splits
-    struct ItemEntry: Identifiable, Hashable {
+    struct ItemEntry: Identifiable {
         let id = UUID()
         var name: String
         var price: Double
         var quantity: Int = 1
         var selectedParticipantIDs: Set<String> = []
+        var customSplits: [String: ParticipantSplitDetail] = [:]  // Custom split per participant
     }
     @State private var items: [ItemEntry] = []
     @State private var showEditItem: ItemEntry?
     @State private var showAddItem = false
+    @State private var showAturPembagian: ItemEntry?  // Item for custom split
     @State private var editingItemName = ""
     @State private var editingItemPrice = ""
     @State private var editingItemQuantity = 1
+    @State private var suspendedMemberUIDs: Set<String> = []
+
+    // Split Mode for Step 3
+    enum SplitMode: String, CaseIterable {
+        case bagiRata = "Bagi Rata"
+        case inputManual = "Input Manual"
+    }
+    @State private var splitMode: SplitMode = .bagiRata
+    @State private var participantAmounts: [String: String] = [:]  // participantID -> amount string
 
     private var activeParticipants: [ParticipantEntry] { participants.filter { $0.isSelected } }
 
@@ -62,9 +92,15 @@ struct AddExpenseView: View {
         var itemTotal: Double = 0
         for item in items {
             if item.selectedParticipantIDs.contains(participantID) {
-                let shareCount = item.selectedParticipantIDs.count
-                if shareCount > 0 {
-                    itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
+                // Check if custom split exists for this item and participant
+                if let customSplit = item.customSplits[participantID], !item.customSplits.isEmpty {
+                    itemTotal += customSplit.customAmount
+                } else {
+                    // Default: equal split
+                    let shareCount = item.selectedParticipantIDs.count
+                    if shareCount > 0 {
+                        itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
+                    }
                 }
             }
         }
@@ -78,13 +114,79 @@ struct AddExpenseView: View {
     private var isStep3Valid: Bool {
         !items.isEmpty &&
         items.allSatisfy { !$0.selectedParticipantIDs.isEmpty } &&
-        abs(calculatedTotal - amount) < 0.01 // Allow small floating point difference
+        abs(calculatedTotal - amount) < 0.01 && // Allow small floating point difference
+        allParticipantsHaveItems
     }
 
     private var isTotalMatching: Bool {
         abs(calculatedTotal - amount) < 0.01
     }
-    
+
+    // Participants who don't have any items assigned
+    private var participantsWithoutItems: [ParticipantEntry] {
+        activeParticipants.filter { participant in
+            calculateParticipantAmount(participant.id) == 0
+        }
+    }
+
+    private var allParticipantsHaveItems: Bool {
+        participantsWithoutItems.isEmpty
+    }
+
+    // MARK: - Bagi Rata Mode Helpers
+    private func parseAmount(_ str: String) -> Double {
+        let cleaned = str
+            .replacingOccurrences(of: ".", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        return Double(cleaned) ?? 0
+    }
+
+    private var bagiRataTotalInput: Double {
+        activeParticipants.reduce(0) { total, participant in
+            total + parseAmount(participantAmounts[participant.id] ?? "0")
+        }
+    }
+
+    private var isBagiRataMatching: Bool {
+        abs(bagiRataTotalInput - amount) < 1  // Allow Rp 1 tolerance
+    }
+
+    private var allParticipantsHaveAmount: Bool {
+        activeParticipants.allSatisfy { participant in
+            parseAmount(participantAmounts[participant.id] ?? "0") > 0
+        }
+    }
+
+    private var isStep3ValidBagiRata: Bool {
+        isBagiRataMatching && allParticipantsHaveAmount
+    }
+
+    private func distributeEvenly() {
+        let count = activeParticipants.count
+        guard count > 0 else { return }
+        let evenAmount = amount / Double(count)
+        let roundedAmount = floor(evenAmount)
+
+        for (index, participant) in activeParticipants.enumerated() {
+            if index == activeParticipants.count - 1 {
+                let currentTotal = Double(activeParticipants.count - 1) * roundedAmount
+                let remainder = amount - currentTotal
+                participantAmounts[participant.id] = String(Int(remainder))
+            } else {
+                participantAmounts[participant.id] = String(Int(roundedAmount))
+            }
+        }
+    }
+
+    private func initializeParticipantAmounts() {
+        for participant in activeParticipants {
+            if participantAmounts[participant.id] == nil {
+                participantAmounts[participant.id] = ""
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -124,24 +226,15 @@ struct AddExpenseView: View {
             if let result = scannedResult, let parsed = result.parsedAmount {
                 amountStr = String(Int(parsed))
             }
-            // Init Participants
-            if participants.isEmpty {
-                participants = trip.members.map { member in
-                    ParticipantEntry(id: UUID().uuidString, uid: member.uid, name: member.displayName, isSelected: true)
-                }
-                // Set default payer to current user, or first participant if current user not found
-                if let currentUser = authVM.currentUser {
-                    paidByParticipant = participants.first(where: { $0.uid == currentUser.uid })
-                }
-                // Fallback to first participant if payer still not set
-                if paidByParticipant == nil {
-                    paidByParticipant = participants.first
-                }
-            }
             // Init Items with single default item
             if items.isEmpty && amount > 0 {
                 items = [ItemEntry(name: "Total Pengeluaran", price: amount, quantity: 1)]
             }
+        }
+        .task {
+            // Load suspended member UIDs first, then init participants
+            await loadSuspendedMembers()
+            initParticipants()
         }
         .onChange(of: amountStr) { newValue in
             let formatted = newValue.formattedAsCurrency()
@@ -152,14 +245,48 @@ struct AddExpenseView: View {
                 items = [ItemEntry(name: "Total Pengeluaran", price: amount, quantity: 1)]
             }
         }
-        .sheet(isPresented: $showImagePicker) {
-            ImagePicker(selectedImage: $selectedImage)
+        .sheet(isPresented: $showDatePicker) {
+            NavigationStack {
+                DatePicker("Pilih Tanggal", selection: $transactionDate, displayedComponents: [.date])
+                    .datePickerStyle(.graphical)
+                    .padding()
+                    .navigationTitle("Tanggal Transaksi")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Selesai") {
+                                showDatePicker = false
+                            }
+                        }
+                    }
+            }
+            .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showPhotoSourcePicker) {
+            PhotoSourcePickerView(
+                onSelectCamera: {
+                    showCameraPicker = true
+                },
+                onSelectGallery: {
+                    showGalleryPicker = true
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showCameraPicker) {
+            ImagePicker(selectedImage: $selectedImage, sourceType: .camera)
+                .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showGalleryPicker) {
+            ImagePicker(selectedImage: $selectedImage, sourceType: .photoLibrary)
         }
         .sheet(item: $showEditItem) { item in
             editItemSheet(item: item)
         }
         .sheet(isPresented: $showAddItem) {
             addItemSheet()
+        }
+        .sheet(item: $showAturPembagian) { item in
+            aturPembagianSheet(item: item)
         }
         .sheet(isPresented: $showEditBankView) {
             NavigationStack {
@@ -176,6 +303,13 @@ struct AddExpenseView: View {
             }
         } message: {
             Text("Orang yang bayar dulu belum punya nomor rekening. Silakan isi rekening terlebih dahulu.")
+        }
+        .alert("Berhasil", isPresented: $showSuccessAlert) {
+            Button("OK") {
+                isAddingExpense = false
+            }
+        } message: {
+            Text("Pengeluaran berhasil disimpan!")
         }
         .tint(.brandPrimary)
         .onChange(of: showEditBankView) { isShowing in
@@ -205,7 +339,7 @@ struct AddExpenseView: View {
                             .frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                             .contentShape(Rectangle())
-                            .onTapGesture { showImagePicker = true }
+                            .onTapGesture { showPhotoSourcePicker = true }
 
                         Button {
                             selectedImage = nil
@@ -218,7 +352,7 @@ struct AddExpenseView: View {
                         .padding(8)
                     }
                 } else {
-                    Button { showImagePicker = true } label: {
+                    Button { showPhotoSourcePicker = true } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "photo.badge.plus")
                                 .font(.system(size: 18))
@@ -297,6 +431,45 @@ struct AddExpenseView: View {
                 )
             }
 
+            // Tanggal Transaksi
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Tanggal Transaksi")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary.opacity(0.6))
+
+                Button {
+                    showDatePicker = true
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.warningAmber.opacity(0.15))
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "calendar")
+                                .font(.system(size: 18))
+                                .foregroundColor(.warningAmber)
+                        }
+
+                        Text(formatTransactionDate(transactionDate))
+                            .font(AppFont.subheadline())
+                            .foregroundColor(.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14))
+                            .foregroundColor(.textPrimary.opacity(0.3))
+                    }
+                    .padding(14)
+                    .background(Color.cardFallback)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(Color.warningAmber.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
             // Kategori
             VStack(alignment: .leading, spacing: 10) {
                 Text("Kategori")
@@ -370,27 +543,50 @@ struct AddExpenseView: View {
 
             VStack(spacing: 12) {
                 ForEach($participants) { $participant in
+                    let isSuspended = suspendedMemberUIDs.contains(participant.uid)
+
                     Button {
-                        participant.isSelected.toggle()
+                        if !isSuspended {
+                            participant.isSelected.toggle()
+                        }
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: participant.isSelected ? "checkmark.square.fill" : "square")
-                                .foregroundColor(participant.isSelected ? .brandPrimary : .textPrimary.opacity(0.3))
-                                .font(.system(size: 22))
+                            if isSuspended {
+                                Image(systemName: "nosign")
+                                    .foregroundColor(.errorRed.opacity(0.5))
+                                    .font(.system(size: 22))
+                            } else {
+                                Image(systemName: participant.isSelected ? "checkmark.square.fill" : "square")
+                                    .foregroundColor(participant.isSelected ? .brandPrimary : .textPrimary.opacity(0.3))
+                                    .font(.system(size: 22))
+                            }
 
                             ZStack {
                                 Circle()
-                                    .fill(Color.brandAccent.opacity(0.12))
+                                    .fill(isSuspended ? Color.errorRed.opacity(0.12) : Color.brandAccent.opacity(0.12))
                                     .frame(width: 36, height: 36)
                                 Text(String(participant.name.prefix(1)).uppercased())
                                     .font(AppFont.caption())
-                                    .foregroundColor(.brandAccent)
+                                    .foregroundColor(isSuspended ? .errorRed : .brandAccent)
                             }
+                            .opacity(isSuspended ? 0.5 : 1.0)
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(participant.name)
-                                    .font(AppFont.subheadline())
-                                    .foregroundColor(.textPrimary)
+                                HStack(spacing: 6) {
+                                    Text(participant.name)
+                                        .font(AppFont.subheadline())
+                                        .foregroundColor(isSuspended ? .textPrimary.opacity(0.5) : .textPrimary)
+
+                                    if isSuspended {
+                                        Text("Ditangguhkan")
+                                            .font(AppFont.caption2())
+                                            .foregroundColor(.errorRed)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.errorRed.opacity(0.15))
+                                            .clipShape(Capsule())
+                                    }
+                                }
                                 if participant.uid == authVM.currentUser?.uid {
                                     Text("Kamu")
                                         .font(AppFont.caption2())
@@ -405,10 +601,11 @@ struct AddExpenseView: View {
                         .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                         .overlay(
                             RoundedRectangle(cornerRadius: AppRadius.md)
-                                .stroke(participant.isSelected ? Color.brandPrimary : Color.borderSoft, lineWidth: 1)
+                                .stroke(isSuspended ? Color.errorRed.opacity(0.3) : (participant.isSelected ? Color.brandPrimary : Color.borderSoft), lineWidth: 1)
                         )
                     }
                     .buttonStyle(.plain)
+                    .disabled(isSuspended)
                 }
             }
 
@@ -427,7 +624,8 @@ struct AddExpenseView: View {
                 }
 
                 VStack(spacing: 12) {
-                    ForEach(participants.filter { $0.isSelected }) { participant in
+                    // Only show non-suspended selected participants as potential payers
+                    ForEach(participants.filter { $0.isSelected && !suspendedMemberUIDs.contains($0.uid) }) { participant in
                         Button {
                             paidByParticipant = participant
                         } label: {
@@ -476,15 +674,258 @@ struct AddExpenseView: View {
     // MARK: - Step 3: Siapa Beli Apa
     private var step3View: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Header
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Siapa aja yang beli apa?")
+            // If source is scan, go directly to input manual (item-based)
+            if source == .scan {
+                // Header for scan
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Siapa aja yang beli apa?")
+                        .font(AppFont.headline())
+                        .foregroundColor(.textPrimary)
+                    Text("Centang item yang dibeli oleh masing-masing orang")
+                        .font(AppFont.caption())
+                        .foregroundColor(.textPrimary.opacity(0.6))
+                }
+
+                inputManualView
+            } else {
+                // Header for manual
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Atur Pembagian")
+                        .font(AppFont.headline())
+                        .foregroundColor(.textPrimary)
+                    Text("Pilih metode pembagian tagihan")
+                        .font(AppFont.caption())
+                        .foregroundColor(.textPrimary.opacity(0.6))
+                }
+
+                // Split Mode Selector (only for manual source)
+                HStack(spacing: 0) {
+                    ForEach(SplitMode.allCases, id: \.self) { mode in
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                splitMode = mode
+                                if mode == .bagiRata {
+                                    initializeParticipantAmounts()
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: mode == .bagiRata ? "equal.circle.fill" : "list.bullet.clipboard.fill")
+                                    .font(.system(size: 14))
+                                Text(mode.rawValue)
+                                    .font(AppFont.subheadline())
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundColor(splitMode == mode ? .white : .textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(splitMode == mode ? Color.brandPrimary : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                        }
+                    }
+                }
+                .padding(4)
+                .background(Color.cardFallback)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
+                        .stroke(Color.borderSoft, lineWidth: 1)
+                )
+
+                // Content based on mode
+                if splitMode == .bagiRata {
+                    bagiRataView
+                } else {
+                    inputManualView
+                }
+            }
+        }
+        .onAppear {
+            if source == .manual {
+                initializeParticipantAmounts()
+            }
+        }
+    }
+
+    // MARK: - Bagi Rata View
+    private var bagiRataView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Quick Actions
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    distributeEvenly()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 16))
+                    Text("Bagi Rata Otomatis")
+                        .font(AppFont.subheadline())
+                        .fontWeight(.semibold)
+                }
+                .foregroundColor(.brandPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.brandPrimary.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.md)
+                        .stroke(Color.brandPrimary.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+
+            // Info Text
+            Text("Masukkan nominal pembagian untuk masing-masing orang. Total harus sama dengan total tagihan.")
+                .font(AppFont.caption())
+                .foregroundColor(.textSecondary)
+                .padding(.horizontal, 4)
+
+            // Participants Amount List
+            VStack(spacing: 12) {
+                ForEach(activeParticipants) { participant in
+                    bagiRataParticipantRow(participant: participant)
+                }
+            }
+
+            // Total Summary
+            bagiRataSummary
+        }
+    }
+
+    // MARK: - Bagi Rata Participant Row
+    private func bagiRataParticipantRow(participant: ParticipantEntry) -> some View {
+        let amountBinding = Binding<String>(
+            get: { participantAmounts[participant.id] ?? "" },
+            set: { participantAmounts[participant.id] = $0 }
+        )
+        let participantAmount = parseAmount(amountBinding.wrappedValue)
+        let hasAmount = participantAmount > 0
+
+        return HStack(spacing: 12) {
+            // Avatar
+            ZStack {
+                Circle()
+                    .fill(Color.brandPrimary.opacity(0.15))
+                    .frame(width: 44, height: 44)
+
+                Text(String(participant.name.prefix(1)).uppercased())
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.brandPrimary)
+                    .fontWeight(.bold)
+            }
+
+            // Name
+            VStack(alignment: .leading, spacing: 2) {
+                Text(participant.name)
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary)
+                    .fontWeight(.medium)
+
+                if hasAmount {
+                    Text(participantAmount.toCurrency(symbol: trip.currency))
+                        .font(AppFont.caption())
+                        .foregroundColor(.brandPrimary)
+                }
+            }
+
+            Spacer()
+
+            // Amount Input
+            HStack(spacing: 4) {
+                Text(trip.currency)
+                    .font(AppFont.caption())
+                    .foregroundColor(.textSecondary)
+                    .fixedSize()
+
+                TextField("0", text: amountBinding)
+                    .keyboardType(.numberPad)
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textPrimary)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 100)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color.surfaceElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(14)
+        .background(Color.cardFallback)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(!hasAmount ? Color.warningAmber.opacity(0.5) : Color.borderSoft, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Bagi Rata Summary
+    private var bagiRataSummary: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Total Input")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textSecondary)
+                Spacer()
+                Text(bagiRataTotalInput.toCurrency(symbol: trip.currency))
+                    .font(AppFont.headline())
+                    .foregroundColor(isBagiRataMatching ? .successGreen : .errorRed)
+            }
+
+            HStack {
+                Text("Total Tagihan")
+                    .font(AppFont.subheadline())
+                    .foregroundColor(.textSecondary)
+                Spacer()
+                Text(amount.toCurrency(symbol: trip.currency))
                     .font(AppFont.headline())
                     .foregroundColor(.textPrimary)
-                Text("Centang item yang dibeli oleh masing-masing orang")
-                    .font(AppFont.caption())
-                    .foregroundColor(.textPrimary.opacity(0.6))
             }
+
+            if !isBagiRataMatching {
+                let difference = amount - bagiRataTotalInput
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12))
+                    Text(difference > 0 ?
+                         "Kurang \(difference.toCurrency(symbol: trip.currency))" :
+                         "Lebih \(abs(difference).toCurrency(symbol: trip.currency))")
+                        .font(AppFont.caption())
+                }
+                .foregroundColor(.errorRed)
+            } else if allParticipantsHaveAmount {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12))
+                    Text("Pembagian sudah sesuai!")
+                        .font(AppFont.caption())
+                }
+                .foregroundColor(.successGreen)
+            }
+
+            if !allParticipantsHaveAmount {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.fill.xmark")
+                        .font(.system(size: 12))
+                    Text("Semua peserta harus memiliki nominal")
+                        .font(AppFont.caption())
+                }
+                .foregroundColor(.warningAmber)
+            }
+        }
+        .padding(16)
+        .background(Color.cardFallback)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+
+    // MARK: - Input Manual View
+    private var inputManualView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Helper Text
+            Text("Centang item yang dibeli oleh masing-masing orang")
+                .font(AppFont.caption())
+                .foregroundColor(.textPrimary.opacity(0.6))
+                .padding(.horizontal, 4)
 
             // Items List
             VStack(spacing: 16) {
@@ -539,6 +980,8 @@ struct AddExpenseView: View {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         if item.selectedParticipantIDs.contains(participant.id) {
                                             item.selectedParticipantIDs.remove(participant.id)
+                                            // Also remove from custom splits
+                                            item.customSplits.removeValue(forKey: participant.id)
                                         } else {
                                             item.selectedParticipantIDs.insert(participant.id)
                                         }
@@ -558,6 +1001,31 @@ struct AddExpenseView: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+                        }
+
+                        // Atur Pembagian Button (only show if more than 1 participant)
+                        if item.selectedParticipantIDs.count > 1 {
+                            Button {
+                                showAturPembagian = item
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(.system(size: 14))
+                                    Text("Atur Pembagian")
+                                        .font(AppFont.caption())
+                                        .fontWeight(.medium)
+                                }
+                                .foregroundColor(.brandAccent)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.brandAccent.opacity(0.1))
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.brandAccent.opacity(0.3), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(16)
@@ -655,6 +1123,25 @@ struct AddExpenseView: View {
                         .foregroundColor(.errorRed)
                         .padding(.top, 4)
                     }
+
+                    // Warning if some participants don't have items
+                    if !participantsWithoutItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "person.fill.xmark")
+                                    .font(.system(size: 12))
+                                Text("Peserta berikut belum punya item:")
+                                    .font(AppFont.caption2())
+                            }
+                            .foregroundColor(.errorRed)
+
+                            Text(participantsWithoutItems.map { $0.name }.joined(separator: ", "))
+                                .font(AppFont.caption2())
+                                .fontWeight(.medium)
+                                .foregroundColor(.errorRed)
+                        }
+                        .padding(.top, 4)
+                    }
                 }
                 .padding(12)
                 .background(Color.surfaceElevated)
@@ -696,18 +1183,33 @@ struct AddExpenseView: View {
                     }
                     .disabled(step == 1 ? !isStep1Valid : !isStep2Valid)
                 } else {
+                    // For scan source, always use item-based validation
+                    // For manual source, check split mode
+                    let isValid = source == .scan ? isStep3Valid : (splitMode == .bagiRata ? isStep3ValidBagiRata : isStep3Valid)
                     Button {
-                        Task { await saveExpense() }
+                        if isTripEnded {
+                            showPostTripAlert = true
+                        } else {
+                            Task { await saveExpense() }
+                        }
                     } label: {
                         Text(expenseVM.isLoading ? "Menyimpan..." : "Simpan Pengeluaran")
                             .font(AppFont.headline())
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(isStep3Valid ? LinearGradient.brandGradient : LinearGradient(colors: [.gray.opacity(0.4)], startPoint: .leading, endPoint: .trailing))
+                            .background(isValid ? LinearGradient.brandGradient : LinearGradient(colors: [.gray.opacity(0.4)], startPoint: .leading, endPoint: .trailing))
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.full))
                     }
-                    .disabled(!isStep3Valid || expenseVM.isLoading)
+                    .disabled(!isValid || expenseVM.isLoading)
+                    .alert("Pengeluaran Setelah Trip", isPresented: $showPostTripAlert) {
+                        Button("Batal", role: .cancel) {}
+                        Button("Tetap Simpan") {
+                            Task { await saveExpense() }
+                        }
+                    } message: {
+                        Text("Pengeluaran ini dibuat setelah tanggal akhir trip. Apakah kamu yakin ingin menyimpannya?")
+                    }
                 }
             }
             .padding(20)
@@ -749,36 +1251,100 @@ struct AddExpenseView: View {
     private func saveExpense() async {
         guard let user = authVM.currentUser else { return }
 
-        // Build splits based on item selections
-        let finalSplits: [ExpenseSplit] = activeParticipants.compactMap { p in
-            let splitAmount = calculateParticipantAmount(p.id)
-            guard splitAmount > 0 else { return nil }
-
-            return ExpenseSplit(
-                id: p.id,
-                uid: p.uid,
-                displayName: p.name,
-                amount: splitAmount,
-                items: []
-            )
-        }
-
-        // Build notes with item breakdown
+        // Build splits based on split mode
+        // For scan source, always use item-based; for manual, check splitMode
+        let useItemBased = source == .scan || splitMode == .inputManual
+        let finalSplits: [ExpenseSplit]
         var finalNotes = notes.isBlank ? "" : notes + "\n\n"
-        finalNotes += "Pembagian Item:\n"
-        for item in items {
-            if !item.selectedParticipantIDs.isEmpty {
-                let participantNames = activeParticipants
-                    .filter { item.selectedParticipantIDs.contains($0.id) }
-                    .map { $0.name }
-                    .joined(separator: ", ")
-                let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
-                let itemTotal = item.price * Double(item.quantity)
-                finalNotes += "• \(qtyPrefix)\(item.name) (\(trip.currency) \(Int(item.price))"
-                if item.quantity > 1 {
-                    finalNotes += " @ \(trip.currency) \(Int(itemTotal))"
+        finalNotes += "Metode Pembagian: \(useItemBased ? "Per Item" : "Bagi Rata")\n\n"
+
+        if !useItemBased {
+            // Bagi Rata Mode
+            finalSplits = activeParticipants.compactMap { p in
+                let splitAmount = parseAmount(participantAmounts[p.id] ?? "0")
+                guard splitAmount > 0 else { return nil }
+
+                // Payer's split is automatically marked as paid
+                let isPayerSplit = p.uid == paidByParticipant?.uid
+
+                return ExpenseSplit(
+                    id: p.id,
+                    uid: p.uid,
+                    displayName: p.name,
+                    amount: splitAmount,
+                    items: ["Pembagian rata: \(splitAmount.toCurrency(symbol: trip.currency))"],
+                    isPaid: isPayerSplit ? true : nil
+                )
+            }
+
+            // Build notes for bagi rata
+            finalNotes += "Peserta Patungan:\n"
+            for p in activeParticipants {
+                let splitAmount = parseAmount(participantAmounts[p.id] ?? "0")
+                if splitAmount > 0 {
+                    finalNotes += "• \(p.name): \(splitAmount.toCurrency(symbol: trip.currency))\n"
                 }
-                finalNotes += "): \(participantNames)\n"
+            }
+        } else {
+            // Input Manual Mode (item-based)
+            finalSplits = activeParticipants.compactMap { p in
+                let splitAmount = calculateParticipantAmount(p.id)
+                guard splitAmount > 0 else { return nil }
+
+                // Get items for this participant
+                var participantItems: [String] = []
+                for item in items {
+                    if item.selectedParticipantIDs.contains(p.id) {
+                        let shareCount = item.selectedParticipantIDs.count
+                        let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
+
+                        // Check if custom split exists
+                        if let customSplit = item.customSplits[p.id], !item.customSplits.isEmpty {
+                            let itemStr = "\(qtyPrefix)\(item.name) - \(customSplit.customAmount.toCurrency(symbol: trip.currency))"
+                            participantItems.append(itemStr)
+                        } else if shareCount > 1 {
+                            // Shared item
+                            let shareAmount = (item.price * Double(item.quantity)) / Double(shareCount)
+                            let itemStr = "\(qtyPrefix)\(item.name) (1/\(shareCount)) - \(shareAmount.toCurrency(symbol: trip.currency))"
+                            participantItems.append(itemStr)
+                        } else {
+                            // Solo item
+                            let itemTotal = item.price * Double(item.quantity)
+                            let itemStr = "\(qtyPrefix)\(item.name) - \(itemTotal.toCurrency(symbol: trip.currency))"
+                            participantItems.append(itemStr)
+                        }
+                    }
+                }
+
+                // Payer's split is automatically marked as paid (they paid for everyone)
+                let isPayerSplit = p.uid == paidByParticipant?.uid
+
+                return ExpenseSplit(
+                    id: p.id,
+                    uid: p.uid,
+                    displayName: p.name,
+                    amount: splitAmount,
+                    items: participantItems,
+                    isPaid: isPayerSplit ? true : nil
+                )
+            }
+
+            // Build notes with item breakdown
+            finalNotes += "Pembagian Item:\n"
+            for item in items {
+                if !item.selectedParticipantIDs.isEmpty {
+                    let participantNames = activeParticipants
+                        .filter { item.selectedParticipantIDs.contains($0.id) }
+                        .map { $0.name }
+                        .joined(separator: ", ")
+                    let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
+                    let itemTotal = item.price * Double(item.quantity)
+                    finalNotes += "• \(qtyPrefix)\(item.name) (\(trip.currency) \(Int(item.price))"
+                    if item.quantity > 1 {
+                        finalNotes += " @ \(trip.currency) \(Int(itemTotal))"
+                    }
+                    finalNotes += "): \(participantNames)\n"
+                }
             }
         }
 
@@ -791,10 +1357,14 @@ struct AddExpenseView: View {
             paidByBankAccount = "\(bankInfo.bankName) - \(bankInfo.accountNumber) a.n. \(bankInfo.accountName)"
         }
 
+        // Use calculatedTotal for item-based, amount for bagi rata
+        let finalAmount = useItemBased ? calculatedTotal : amount
+
         await expenseVM.addExpense(
             tripID: trip.id ?? "",
+            tripName: trip.name,
             title: title,
-            amount: calculatedTotal,
+            amount: finalAmount,
             currency: trip.currency,
             category: category,
             paidByUID: payer.uid,
@@ -804,9 +1374,10 @@ struct AddExpenseView: View {
             members: trip.members,
             customSplits: finalSplits,
             notes: finalNotes.trimmingCharacters(in: .whitespacesAndNewlines),
-            receiptImage: selectedImage
+            receiptImage: selectedImage,
+            transactionDate: transactionDate
         )
-        isAddingExpense = false
+        showSuccessAlert = true
     }
     
     // MARK: - Helpers
@@ -817,6 +1388,14 @@ struct AddExpenseView: View {
                 .foregroundColor(.textPrimary.opacity(0.6))
             content()
         }
+    }
+
+    private func formatTransactionDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "id_ID")
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
     }
 
     // MARK: - Edit Item Sheet
@@ -848,7 +1427,7 @@ struct AddExpenseView: View {
                     Button("Simpan") {
                         if let index = items.firstIndex(where: { $0.id == item.id }) {
                             items[index].name = editingItemName.trimmed
-                            items[index].price = Double(editingItemPrice.replacingOccurrences(of: ",", with: "")) ?? 0
+                            items[index].price = Double(editingItemPrice.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: "")) ?? 0
                             items[index].quantity = editingItemQuantity
                         }
                         showEditItem = nil
@@ -887,7 +1466,7 @@ struct AddExpenseView: View {
                     Button("Tambah") {
                         let newItem = ItemEntry(
                             name: editingItemName.trimmed,
-                            price: Double(editingItemPrice.replacingOccurrences(of: ",", with: "")) ?? 0,
+                            price: Double(editingItemPrice.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: "")) ?? 0,
                             quantity: editingItemQuantity
                         )
                         items.append(newItem)
@@ -901,6 +1480,88 @@ struct AddExpenseView: View {
             }
         }
         .presentationDetents([.medium])
+    }
+
+    // MARK: - Atur Pembagian Sheet
+    @ViewBuilder
+    private func aturPembagianSheet(item: ItemEntry) -> some View {
+        let selectedParticipants = activeParticipants.filter { item.selectedParticipantIDs.contains($0.id) }
+        let participantTuples = selectedParticipants.map { (id: $0.id, name: $0.name) }
+
+        AturPembagianView(
+            itemName: item.name,
+            itemPrice: item.price * Double(item.quantity),
+            itemQuantity: item.quantity,
+            currency: trip.currency,
+            participants: participantTuples,
+            onSave: { splits in
+                // Update the item's custom splits
+                if let index = items.firstIndex(where: { $0.id == item.id }) {
+                    items[index].customSplits = splits
+
+                    // Remove participants with 0 portion from selectedParticipantIDs
+                    for (participantId, split) in splits {
+                        if split.portion == 0 {
+                            items[index].selectedParticipantIDs.remove(participantId)
+                            items[index].customSplits.removeValue(forKey: participantId)
+                            print("🔴 [AddExpenseView] Removed \(split.name) from \(item.name) (0 porsi)")
+                        } else {
+                            print("   👤 \(split.name): \(split.portion) porsi = \(trip.currency) \(Int(split.customAmount))")
+                        }
+                    }
+                    print("✅ [AddExpenseView] Custom splits saved for \(item.name)")
+                }
+            }
+        )
+    }
+
+    // MARK: - Load Suspended Members
+    private func loadSuspendedMembers() async {
+        let memberUIDs = trip.memberUIDs
+        guard !memberUIDs.isEmpty else { return }
+
+        do {
+            let db = FirestoreService.shared.db
+            let snapshot = try await db.collection(Collection.users)
+                .whereField("uid", in: memberUIDs)
+                .getDocuments()
+
+            let suspended = snapshot.documents.compactMap { doc -> String? in
+                guard let user = try? doc.data(as: UserModel.self),
+                      user.isSuspended else { return nil }
+                return user.uid
+            }
+
+            suspendedMemberUIDs = Set(suspended)
+        } catch {
+            print("Error loading suspended members: \(error)")
+        }
+    }
+
+    // MARK: - Init Participants
+    private func initParticipants() {
+        guard participants.isEmpty else { return }
+
+        // Include all members, but suspended users are not selected by default
+        participants = trip.members.map { member in
+            let isSuspended = suspendedMemberUIDs.contains(member.uid)
+            return ParticipantEntry(
+                id: UUID().uuidString,
+                uid: member.uid,
+                name: member.displayName,
+                isSelected: !isSuspended  // Suspended users not selected by default
+            )
+        }
+
+        // Set default payer to current user (if not suspended), or first non-suspended participant
+        if let currentUser = authVM.currentUser,
+           !suspendedMemberUIDs.contains(currentUser.uid) {
+            paidByParticipant = participants.first(where: { $0.uid == currentUser.uid })
+        }
+        // Fallback to first non-suspended participant if payer still not set
+        if paidByParticipant == nil {
+            paidByParticipant = participants.first(where: { !suspendedMemberUIDs.contains($0.uid) })
+        }
     }
 }
 
