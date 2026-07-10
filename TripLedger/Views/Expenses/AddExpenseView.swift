@@ -363,29 +363,9 @@ struct AddExpenseView: View {
                 guard splitAmount > 0 else { return nil }
 
                 // Get items for this participant
-                var participantItems: [String] = []
-                for item in items {
-                    if item.selectedParticipantIDs.contains(p.id) {
-                        let shareCount = item.selectedParticipantIDs.count
-                        let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
-
-                        // Check if custom split exists
-                        if let customSplit = item.customSplits[p.id], !item.customSplits.isEmpty {
-                            let itemStr = "\(qtyPrefix)\(item.name) - \(customSplit.customAmount.toCurrency(symbol: trip.currency))"
-                            participantItems.append(itemStr)
-                        } else if shareCount > 1 {
-                            // Shared item
-                            let shareAmount = (item.price * Double(item.quantity)) / Double(shareCount)
-                            let itemStr = "\(qtyPrefix)\(item.name) (1/\(shareCount)) - \(shareAmount.toCurrency(symbol: trip.currency))"
-                            participantItems.append(itemStr)
-                        } else {
-                            // Solo item
-                            let itemTotal = item.price * Double(item.quantity)
-                            let itemStr = "\(qtyPrefix)\(item.name) - \(itemTotal.toCurrency(symbol: trip.currency))"
-                            participantItems.append(itemStr)
-                        }
-                    }
-                }
+                let participantItems = BillNotesBuilder.participantItemList(
+                    for: p.id, items: items, currency: trip.currency
+                )
 
                 // Payer's split is automatically marked as paid (they paid for everyone)
                 let isPayerSplit = p.uid == paidByParticipant?.uid
@@ -402,21 +382,11 @@ struct AddExpenseView: View {
 
             // Build notes with item breakdown
             finalNotes += "Pembagian Item:\n"
-            for item in items {
-                if !item.selectedParticipantIDs.isEmpty {
-                    let participantNames = activeParticipants
-                        .filter { item.selectedParticipantIDs.contains($0.id) }
-                        .map { $0.name }
-                        .joined(separator: ", ")
-                    let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
-                    let itemTotal = item.price * Double(item.quantity)
-                    finalNotes += "• \(qtyPrefix)\(item.name) (\(trip.currency) \(Int(item.price))"
-                    if item.quantity > 1 {
-                        finalNotes += " @ \(trip.currency) \(Int(itemTotal))"
-                    }
-                    finalNotes += "): \(participantNames)\n"
-                }
-            }
+            finalNotes += BillNotesBuilder.itemBreakdownLines(
+                items: items,
+                participants: activeParticipants.map { ($0.id, $0.name) },
+                currency: trip.currency
+            )
         }
 
         // Get payer info
@@ -425,7 +395,7 @@ struct AddExpenseView: View {
         // Get bank account info for payer (only if payer is current user)
         var paidByBankAccount: String? = nil
         if payer.uid == user.uid, let bankInfo = user.bankInfo {
-            paidByBankAccount = "\(bankInfo.bankName) - \(bankInfo.accountNumber) a.n. \(bankInfo.accountName)"
+            paidByBankAccount = BillNotesBuilder.bankAccountLine(bankInfo)
         }
 
         // Use calculatedTotal for item-based, amount for bagi rata

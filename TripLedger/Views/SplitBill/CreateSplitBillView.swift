@@ -606,21 +606,11 @@ struct CreateSplitBillView: View {
         // Only show item breakdown for item-based mode
         if useItemBased {
             notesText += "\nPembagian Item:\n"
-            for item in items {
-                if !item.selectedParticipantIDs.isEmpty {
-                    let participantNames = activeParticipants
-                        .filter { item.selectedParticipantIDs.contains($0.id) }
-                        .map { $0.name }
-                        .joined(separator: ", ")
-                    let qtyPrefix = item.quantity > 1 ? "\(item.quantity)x " : ""
-                    let itemTotal = item.price * Double(item.quantity)
-                    notesText += "• \(qtyPrefix)\(item.name) (\(currency) \(Int(item.price))"
-                    if item.quantity > 1 {
-                        notesText += " @ \(currency) \(Int(itemTotal))"
-                    }
-                    notesText += "): \(participantNames)\n"
-                }
-            }
+            notesText += BillNotesBuilder.itemBreakdownLines(
+                items: items,
+                participants: activeParticipants.map { ($0.id, $0.name) },
+                currency: currency
+            )
         }
 
         // Only show additional charges for item-based mode
@@ -644,7 +634,7 @@ struct CreateSplitBillView: View {
         // Get bank account info (only for current user)
         var ownerBankAccount: String? = nil
         if payerUID == user.uid, let bankInfo = user.bankInfo {
-            ownerBankAccount = "\(bankInfo.bankName) - \(bankInfo.accountNumber) a.n. \(bankInfo.accountName)"
+            ownerBankAccount = BillNotesBuilder.bankAccountLine(bankInfo)
         }
 
         _ = await splitBillVM.createSplitBill(
