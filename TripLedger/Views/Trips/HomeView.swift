@@ -53,7 +53,7 @@ struct HomeView: View {
                 }
                 .padding(.trailing, 20)
                 .padding(.vertical)
-                
+
             }
             .navigationBarHidden(true)
         }
@@ -63,8 +63,9 @@ struct HomeView: View {
                 .environmentObject(tripVM)
         }
         .onAppear {
+            // Always refresh debt data when home page appears
             Task {
-                await fetchTripPendingExpenses()
+                await refreshAllDebtData()
             }
         }
         .onChange(of: tripVM.activeTrips) { _ in
@@ -73,10 +74,19 @@ struct HomeView: View {
             }
         }
         .refreshable {
-            // Pull to refresh - reload pending expenses
-            // Split bills are updated via real-time listener automatically
-            await fetchTripPendingExpenses()
+            // Pull to refresh - reload all debt data
+            await refreshAllDebtData()
         }
+    }
+
+    // MARK: - Refresh All Debt Data
+    private func refreshAllDebtData() async {
+        // Refresh split bills listener if needed
+        if let uid = authVM.currentUser?.uid {
+            splitBillVM.listenSplitBills(uid: uid)
+        }
+        // Fetch trip expenses
+        await fetchTripPendingExpenses()
     }
 
     // MARK: - Pending Bills (from split bills & expenses)

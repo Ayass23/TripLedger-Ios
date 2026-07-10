@@ -267,9 +267,9 @@ struct AddParticipantView: View {
 
     // MARK: - Helper Properties
     private var filteredFriends: [UserModel] {
-        // Filter out current user from the list
+        // Filter out current user and admin users from the list
         let friendsExcludingSelf = friendsVM.friends.filter { friend in
-            friend.uid != authVM.currentUser?.uid
+            friend.uid != authVM.currentUser?.uid && friend.role != .admin
         }
 
         if searchQuery.isEmpty {

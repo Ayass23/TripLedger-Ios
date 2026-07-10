@@ -169,9 +169,9 @@ struct FriendsView: View {
 
     // MARK: - Filtered Friends
     private var filteredFriends: [UserModel] {
-        // Filter out current user (shouldn't see yourself in friend list)
+        // Filter out current user and admin users (shouldn't see yourself or admins in friend list)
         let friendsExcludingSelf = friendsVM.friends.filter { friend in
-            friend.uid != authVM.currentUser?.uid
+            friend.uid != authVM.currentUser?.uid && friend.role != .admin
         }
 
         if searchQuery.isEmpty {

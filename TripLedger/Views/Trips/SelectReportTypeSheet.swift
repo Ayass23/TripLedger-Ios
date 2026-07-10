@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SelectReportTypeSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let isOwner: Bool
     let onSelectTripSummary: () -> Void
     let onSelectPersonalExpense: () -> Void
 
@@ -24,49 +25,51 @@ struct SelectReportTypeSheet: View {
                 .padding(.top, 20)
                 .padding(.horizontal, 20)
 
-                // Trip Summary Report Card
-                Button {
-                    onSelectTripSummary()
-                    dismiss()
-                } label: {
-                    HStack(spacing: 16) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.brandPrimary.opacity(0.15))
-                                .frame(width: 56, height: 56)
+                // Trip Summary Report Card - Only visible for owner
+                if isOwner {
+                    Button {
+                        onSelectTripSummary()
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 16) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.brandPrimary.opacity(0.15))
+                                    .frame(width: 56, height: 56)
 
-                            Image(systemName: "doc.text.fill")
-                                .font(.system(size: 24))
-                                .foregroundColor(.brandPrimary)
+                                Image(systemName: "doc.text.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.brandPrimary)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Trip Summary Report")
+                                    .font(AppFont.headline())
+                                    .foregroundColor(.textPrimary)
+                                    .lineLimit(1)
+
+                                Text("Ringkasan keuangan trip secara keseluruhan")
+                                    .font(AppFont.caption())
+                                    .foregroundColor(.textSecondary)
+                                    .lineLimit(2)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.textSecondary.opacity(0.4))
                         }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Trip Summary Report")
-                                .font(AppFont.headline())
-                                .foregroundColor(.textPrimary)
-                                .lineLimit(1)
-
-                            Text("Ringkasan keuangan trip secara keseluruhan")
-                                .font(AppFont.caption())
-                                .foregroundColor(.textSecondary)
-                                .lineLimit(2)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.textSecondary.opacity(0.4))
+                        .padding(16)
+                        .background(Color.cardFallback)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+                        .shadow(color: .black.opacity(0.06), radius: 8, y: 3)
                     }
-                    .padding(16)
-                    .background(Color.cardFallback)
-                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
-                    .shadow(color: .black.opacity(0.06), radius: 8, y: 3)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 20)
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 20)
 
-                // Personal Expense Report Card
+                // Personal Expense Report Card - Always visible
                 Button {
                     onSelectPersonalExpense()
                     dismiss()
@@ -116,6 +119,7 @@ struct SelectReportTypeSheet: View {
 
 #Preview {
     SelectReportTypeSheet(
+        isOwner: true,
         onSelectTripSummary: {},
         onSelectPersonalExpense: {}
     )

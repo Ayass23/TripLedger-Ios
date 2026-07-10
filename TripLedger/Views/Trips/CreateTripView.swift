@@ -223,20 +223,16 @@ struct CreateTripView: View {
             .padding(.top, 16)
             .padding(.bottom, 8)
 
-            // Search bar
+            // Search bar (filters friends only)
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 16))
                     .foregroundColor(.textPrimary.opacity(0.35))
-                TextField("Cari user berdasarkan email...", text: $searchQuery)
+                TextField("Cari nama teman...", text: $searchQuery)
                     .font(AppFont.subheadline())
                     .foregroundColor(.textPrimary)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
-                    .onChange(of: searchQuery) { newValue in
-                        guard let uid = authVM.currentUser?.uid else { return }
-                        Task { await friendsVM.searchUsers(query: newValue, currentUID: uid) }
-                    }
                 if !searchQuery.isEmpty {
                     Button { searchQuery = "" } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -286,33 +282,42 @@ struct CreateTripView: View {
                 .padding(.top, 12)
             }
 
-            // Results / Friends list
+            // Friends list (filtered by search query)
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0) {
-                    // Search results
-                    if !searchQuery.isBlank && !friendsVM.searchResults.isEmpty {
-                        sectionLabel("Hasil Pencarian")
-                        ForEach(friendsVM.searchResults) { user in
-                            userRow(user)
-                        }
-                    }
-
-                    // Friends list
-                    if !friendsVM.friends.isEmpty {
-                        ForEach(friendsVM.friends) { friend in
+                    // Filtered friends list (only shows friends, not all users)
+                    if !filteredFriends.isEmpty {
+                        ForEach(filteredFriends) { friend in
                             userRow(friend)
                         }
                     }
 
-                    // Empty state
-                    if friendsVM.friends.isEmpty && friendsVM.searchResults.isEmpty && searchQuery.isBlank {
+                    // Empty state - no friends
+                    if friendsVM.friends.isEmpty {
                         VStack(spacing: 12) {
                             Text("👥")
                                 .font(.system(size: 40))
                             Text("Belum ada teman")
                                 .font(AppFont.headline())
                                 .foregroundColor(.textPrimary.opacity(0.6))
-                            Text("Cari user berdasarkan email\nuntuk menambahkan anggota")
+                            Text("Tambahkan teman di menu Teman\nuntuk mengundang ke trip")
+                                .font(AppFont.footnote())
+                                .foregroundColor(.textPrimary.opacity(0.4))
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    }
+
+                    // No search results state
+                    if !friendsVM.friends.isEmpty && filteredFriends.isEmpty && !searchQuery.isEmpty {
+                        VStack(spacing: 12) {
+                            Text("🔍")
+                                .font(.system(size: 40))
+                            Text("Tidak ditemukan")
+                                .font(AppFont.headline())
+                                .foregroundColor(.textPrimary.opacity(0.6))
+                            Text("Tidak ada teman dengan nama tersebut")
                                 .font(AppFont.footnote())
                                 .foregroundColor(.textPrimary.opacity(0.4))
                                 .multilineTextAlignment(.center)
@@ -457,6 +462,24 @@ struct CreateTripView: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 currency = c
             }
+        }
+    }
+
+    // MARK: - Filtered Friends (only shows friends, filtered by search query)
+    private var filteredFriends: [UserModel] {
+        // Filter out current user and admin users
+        let friendsExcludingSelf = friendsVM.friends.filter { friend in
+            friend.uid != authVM.currentUser?.uid && friend.role != .admin
+        }
+
+        // Apply search filter if query exists
+        if searchQuery.isEmpty {
+            return friendsExcludingSelf
+        }
+
+        return friendsExcludingSelf.filter { friend in
+            friend.displayName.localizedCaseInsensitiveContains(searchQuery) ||
+            friend.email.localizedCaseInsensitiveContains(searchQuery)
         }
     }
 

@@ -56,31 +56,26 @@ struct SettlementPaymentView: View {
         .navigationTitle("Konfirmasi Pembayaran")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showImageSourceSheet) {
-            NavigationStack {
-                PhotoSourcePickerPage(
-                    onSelectCamera: {
-                        showImageSourceSheet = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            showCameraFullScreen = true
-                        }
-                    },
-                    onSelectGallery: {
-                        showImageSourceSheet = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            showPhotoPicker = true
-                        }
+            ImageSourceSheet(
+                onCameraSelected: {
+                    showImageSourceSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showCameraFullScreen = true
                     }
-                )
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Batal") {
-                            showImageSourceSheet = false
-                        }
-                        .foregroundColor(.textPrimary.opacity(0.7))
+                },
+                onGallerySelected: {
+                    showImageSourceSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showPhotoPicker = true
                     }
+                },
+                onDismiss: {
+                    showImageSourceSheet = false
                 }
-            }
-            .presentationDetents([.medium, .large])
+            )
+            .presentationDetents([.height(260)])
+            .presentationDragIndicator(.hidden)
+            .presentationCornerRadius(24)
         }
         .fullScreenCover(isPresented: $showCameraFullScreen) {
             ImagePicker(selectedImage: $proofImage, sourceType: .camera)

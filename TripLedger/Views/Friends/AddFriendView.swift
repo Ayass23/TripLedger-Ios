@@ -263,8 +263,8 @@ struct AddFriendView: View {
     private var filteredSearchResults: [UserModel] {
         guard let currentUID = authVM.currentUser?.uid else { return friendsVM.searchResults }
 
-        // Filter out current user
-        return friendsVM.searchResults.filter { $0.uid != currentUID }
+        // Filter out current user and admin users
+        return friendsVM.searchResults.filter { $0.uid != currentUID && $0.role != .admin }
     }
 
     private func getSelectedUserModels() -> [UserModel] {

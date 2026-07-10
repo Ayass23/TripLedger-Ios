@@ -387,6 +387,7 @@ struct TripDetailView: View {
 
     private var selectReportSheetContent: some View {
         SelectReportTypeSheet(
+            isOwner: isOwner,
             onSelectTripSummary: {
                 selectedReportType = .tripSummary
                 generateReport()
@@ -396,7 +397,7 @@ struct TripDetailView: View {
                 generateReport()
             }
         )
-        .presentationDetents([.height(350)])
+        .presentationDetents([.height(isOwner ? 350 : 250)])
         .presentationDragIndicator(.visible)
     }
 

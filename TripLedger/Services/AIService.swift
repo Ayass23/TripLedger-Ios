@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 // MARK: - AI Service
 final class AIService {
@@ -20,8 +21,12 @@ final class AIService {
 
     private let apiEndpoint = "https://api.openai.com/v1/chat/completions"
 
-    // MARK: - Parse Receipt from OCR Text
-    func parseReceipt(from ocrText: String) async throws -> ParsedReceiptModel {
+    // MARK: - Parse Receipt from OCR Text (+ optional photo)
+    /// When the receipt photo is provided it is sent to the multimodal model
+    /// alongside the OCR text: the photo is the source of truth for item order
+    /// and name↔price pairing (immune to OCR row-reconstruction errors), while
+    /// the OCR text helps with exact digits.
+    func parseReceipt(from ocrText: String, image: UIImage? = nil) async throws -> ParsedReceiptModel {
         print("📄 [AIService] Starting receipt parsing...")
         print("📝 [AIService] OCR Text (\(ocrText.count) chars):")
         print("─────────────────────────────────────")
@@ -29,7 +34,7 @@ final class AIService {
         print("─────────────────────────────────────")
 
         // Buat prompt untuk AI (spesifik untuk struk Indonesia) - IMPROVED VERSION v2
-        let prompt = """
+        var prompt = """
         Analisis teks struk pembayaran Indonesia berikut.
 
         === TEKS STRUK ===
@@ -255,6 +260,7 @@ final class AIService {
         Note: Es Teh qty=2, price=5000 (10000÷2), BUKAN price=10000!
 
         PENTING:
+        - Ekstrak SEMUA item tanpa kecuali — struk bisa berisi 20+ item, jangan meringkas!
         - Semua angka harus INTEGER (25000 bukan 25.0)
         - Item murah (plastik, sedotan) bisa < 1000, jangan diubah
         - QUANTITY: price = harga_baris ÷ quantity (SANGAT PENTING!)
@@ -262,6 +268,25 @@ final class AIService {
         - WAJIB ekstrak rounding jika ada pembulatan di struk!
         - Return HANYA JSON, tanpa markdown atau penjelasan
         """
+
+        // Attach the photo when available — layout comes from the photo,
+        // not from the (possibly scrambled) OCR text
+        let imageBase64 = encodeImageForVision(image)
+        if imageBase64 != nil {
+            prompt += """
+
+
+            ═══════════════════════════════════════════════════════════════
+            FOTO STRUK TERLAMPIR — SUMBER UTAMA:
+            ═══════════════════════════════════════════════════════════════
+            Foto struk asli dilampirkan bersama pesan ini. Teks OCR di atas bisa
+            SALAH URUTAN dan SALAH PASANGAN nama-harga. Karena itu:
+            1. Gunakan FOTO sebagai sumber utama untuk: urutan item, pasangan
+               nama ↔ quantity ↔ harga, dan angka yang terpecah/aneh di OCR
+            2. Gunakan teks OCR hanya sebagai alat bantu ejaan/angka
+            3. Jika foto dan teks OCR bertentangan, IKUTI FOTO
+            """
+        }
 
         // Check if API key is configured
         guard !apiKey.isEmpty else {
@@ -271,68 +296,86 @@ final class AIService {
 
         // Prepare request
         print("🤖 [AIService] Calling OpenAI API...")
-        let requestBody: [String: Any] = [
-            "model": "gpt-5.4-mini-2026-03-17",
-            "messages": [
-                ["role": "system", "content": """
-                    Kamu adalah parser struk Indonesia yang sangat akurat.
+        let systemPrompt = """
+            Kamu adalah parser struk Indonesia yang sangat akurat.
 
-                    ATURAN MUTLAK:
-                    1. TITIK dalam angka Indonesia = pemisah ribuan (50.000 = 50000)
-                    2. JANGAN pernah interpretasikan titik sebagai desimal
-                    3. Selalu return angka sebagai INTEGER (25000, bukan 25.0)
-                    4. QUANTITY: Jika ada "Es Teh 2 10.000", qty=2 dan price=5000 (10000÷2)
-                       - Harga di struk = TOTAL BARIS, bukan harga satuan!
-                       - Hitung: price = harga_baris ÷ quantity
-                    5. Item MURAH (plastik, sedotan, es) memang < Rp 1.000, jangan diubah!
-                    6. Item dengan HARGA NEGATIF atau keyword VC/VOUCHER/PROMO = DISKON, bukan item!
-                    7. WAJIB ekstrak PAJAK jika ada (PPN/PB1/VAT/TAX/PAJAK)
-                    8. WAJIB ekstrak PEMBULATAN jika ada (PEMBULATAN/ROUNDING/BULAT/SELISIH)
-                    9. VALIDASI: SUM(price×qty) + tax + service + rounding - discount ≈ total
-                    10. Jika validasi gagal dan pajak membuat total > actual, set pajak = null (informatif)
-                    11. Return HANYA valid JSON, tanpa markdown atau penjelasan
-                    """],
-                ["role": "user", "content": prompt]
-            ],
-            "temperature": 0,  // Zero temperature for maximum consistency
-            "max_completion_tokens": 2000,
-            "response_format": ["type": "json_object"]  // Force JSON output
-        ]
+            ATURAN MUTLAK:
+            1. TITIK dalam angka Indonesia = pemisah ribuan (50.000 = 50000)
+            2. JANGAN pernah interpretasikan titik sebagai desimal
+            3. Selalu return angka sebagai INTEGER (25000, bukan 25.0)
+            4. QUANTITY: Jika ada "Es Teh 2 10.000", qty=2 dan price=5000 (10000÷2)
+               - Harga di struk = TOTAL BARIS, bukan harga satuan!
+               - Hitung: price = harga_baris ÷ quantity
+            5. Item MURAH (plastik, sedotan, es) memang < Rp 1.000, jangan diubah!
+            6. Item dengan HARGA NEGATIF atau keyword VC/VOUCHER/PROMO = DISKON, bukan item!
+            7. WAJIB ekstrak PAJAK jika ada (PPN/PB1/VAT/TAX/PAJAK)
+            8. WAJIB ekstrak PEMBULATAN jika ada (PEMBULATAN/ROUNDING/BULAT/SELISIH)
+            9. VALIDASI: SUM(price×qty) + tax + service + rounding - discount ≈ total
+            10. Jika validasi gagal dan pajak membuat total > actual, set pajak = null (informatif)
+            11. Ekstrak SEMUA item tanpa kecuali — struk bisa berisi 20+ item, JANGAN meringkas atau melewatkan item apa pun
+            12. KOREKSI kesalahan OCR yang jelas:
+                - Huruf tunggal T/I/l di awal baris item kemungkinan besar angka 1 (quantity), bukan bagian nama
+                - Rapikan salah eja OCR pada nama item (contoh: "Avam" → "Ayam", "Tkan" → "Ikan", "Asın" → "Asin")
+            13. Baris yang hanya berisi HARGA tanpa nama biasanya milik item di baris atasnya
+                yang tergabung dengan item lain — pisahkan kembali jika masuk akal
+            14. Return HANYA valid JSON, tanpa markdown atau penjelasan
+            """
 
-        guard let url = URL(string: apiEndpoint) else {
-            print("❌ [AIService] Invalid API endpoint")
-            throw AppError.unknown("Invalid API endpoint")
+        // User message: multimodal (text + photo) when the photo is available
+        let userMessageContent: Any
+        if let imageBase64 = imageBase64 {
+            print("🖼️ [AIService] Attaching receipt photo to AI request")
+            userMessageContent = [
+                ["type": "text", "text": prompt],
+                ["type": "image_url", "image_url": [
+                    "url": "data:image/jpeg;base64,\(imageBase64)",
+                    "detail": "high"  // receipts have small text
+                ]]
+            ]
+        } else {
+            userMessageContent = prompt
         }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        // Reasoning models spend completion tokens on reasoning too; 2000 was
+        // truncating long receipts. Start at 8000 and retry once at 16000 if
+        // the response still comes back truncated (finish_reason=length).
+        var maxCompletionTokens = 8000
+        var content = ""
 
-        // Make API call
-        let (data, response) = try await URLSession.shared.data(for: request)
+        while true {
+            let requestBody: [String: Any] = [
+                "model": "gpt-5.4-mini-2026-03-17",
+                "messages": [
+                    ["role": "system", "content": systemPrompt],
+                    ["role": "user", "content": userMessageContent]
+                ],
+                "temperature": 0,  // Zero temperature for maximum consistency
+                "max_completion_tokens": maxCompletionTokens,
+                "response_format": ["type": "json_object"]  // Force JSON output
+            ]
 
-        // Check response
-        guard let httpResponse = response as? HTTPURLResponse else {
-            print("❌ [AIService] Invalid HTTP response")
-            throw AppError.unknown("Invalid response")
-        }
+            let aiResponse = try await performChatRequest(body: requestBody)
+            let choice = aiResponse.choices.first
 
-        print("📡 [AIService] Response status: \(httpResponse.statusCode)")
+            // Detect truncated response BEFORE parsing — a cut-off JSON would
+            // otherwise fail decoding with a generic, misleading error
+            if choice?.finishReason == "length" {
+                if maxCompletionTokens < 16000 {
+                    print("⚠️ [AIService] Response truncated (finish_reason=length), retrying with 16000 tokens...")
+                    maxCompletionTokens = 16000
+                    continue
+                }
+                print("❌ [AIService] Response truncated even at \(maxCompletionTokens) tokens")
+                throw AppError.unknown("Respons AI terpotong karena struk terlalu panjang. Coba scan ulang dengan foto yang lebih jelas.")
+            }
 
-        guard httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("❌ [AIService] API Error (\(httpResponse.statusCode)): \(errorMessage)")
-            throw AppError.unknown("API Error (\(httpResponse.statusCode)): \(errorMessage)")
-        }
+            guard let responseContent = choice?.message.content, !responseContent.isEmpty else {
+                print("❌ [AIService] No content in AI response")
+                throw AppError.unknown("No content in AI response")
+            }
 
-        // Parse response
-        let aiResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-
-        guard let content = aiResponse.choices.first?.message.content else {
-            print("❌ [AIService] No content in AI response")
-            throw AppError.unknown("No content in AI response")
+            content = responseContent
+            break
         }
 
         print("🤖 [AIService] Raw AI Response:")
@@ -574,6 +617,88 @@ final class AIService {
         return result
     }
 
+    // MARK: - Encode Image for Vision Input
+    /// Downscales and JPEG-encodes the receipt photo for the multimodal API.
+    /// Drawing through UIGraphicsImageRenderer also bakes the camera
+    /// orientation into the pixels. 2048px is plenty: the API's high-detail
+    /// pipeline rescales larger images anyway.
+    private func encodeImageForVision(_ image: UIImage?, maxDimension: CGFloat = 2048) -> String? {
+        guard let image = image else { return nil }
+
+        let largest = max(image.size.width, image.size.height)
+        let ratio = largest > maxDimension ? maxDimension / largest : 1.0
+        let newSize = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: newSize, format: format)
+            .image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
+
+        guard let jpegData = resized.jpegData(compressionQuality: 0.6) else {
+            print("⚠️ [AIService] Could not JPEG-encode receipt photo, sending text only")
+            return nil
+        }
+        print("🖼️ [AIService] Receipt photo encoded: \(Int(newSize.width))x\(Int(newSize.height)), \(jpegData.count / 1024) KB")
+        return jpegData.base64EncodedString()
+    }
+
+    // MARK: - Perform Chat Request
+    /// Sends one chat-completion request with a generous timeout and a single
+    /// automatic retry for transient failures (rate limit, server error,
+    /// timeout, dropped connection) — common on mobile networks.
+    private func performChatRequest(body: [String: Any]) async throws -> OpenAIResponse {
+        guard let url = URL(string: apiEndpoint) else {
+            print("❌ [AIService] Invalid API endpoint")
+            throw AppError.unknown("Invalid API endpoint")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 120  // reasoning + long receipts can exceed the default 60s
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let maxAttempts = 2
+        for attempt in 1...maxAttempts {
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    print("❌ [AIService] Invalid HTTP response")
+                    throw AppError.unknown("Invalid response")
+                }
+
+                print("📡 [AIService] Response status: \(httpResponse.statusCode)")
+
+                if httpResponse.statusCode == 200 {
+                    return try JSONDecoder().decode(OpenAIResponse.self, from: data)
+                }
+
+                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                let isTransient = httpResponse.statusCode == 429 || httpResponse.statusCode >= 500
+                if isTransient && attempt < maxAttempts {
+                    print("⚠️ [AIService] Transient API error (\(httpResponse.statusCode)), retrying...")
+                    try await Task.sleep(nanoseconds: 1_500_000_000)
+                    continue
+                }
+                print("❌ [AIService] API Error (\(httpResponse.statusCode)): \(errorMessage)")
+                throw AppError.unknown("API Error (\(httpResponse.statusCode)): \(errorMessage)")
+            } catch let error as URLError {
+                let isTransient = error.code == .timedOut || error.code == .networkConnectionLost
+                if isTransient && attempt < maxAttempts {
+                    print("⚠️ [AIService] Network error (\(error.code.rawValue)), retrying...")
+                    try await Task.sleep(nanoseconds: 1_500_000_000)
+                    continue
+                }
+                throw error
+            }
+        }
+
+        // Unreachable: the loop always returns or throws on the last attempt
+        throw AppError.unknown("Request failed")
+    }
+
     // MARK: - Extract Quantity from Item Name
     /// Detects quantity patterns in item names and returns (quantity, cleanedName)
     /// Examples:
@@ -802,9 +927,17 @@ private struct OpenAIResponse: Codable {
 
     struct Choice: Codable {
         let message: Message
+        let finishReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case message
+            case finishReason = "finish_reason"
+        }
     }
 
     struct Message: Codable {
-        let content: String
+        // Optional: some responses (e.g. refusals) come back without content;
+        // a non-optional field would fail decoding with a misleading error
+        let content: String?
     }
 }

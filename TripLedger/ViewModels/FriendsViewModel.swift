@@ -23,9 +23,11 @@ final class FriendsViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            friends = try await db.fetchList(collection: Collection.users) { ref in
+            let fetchedFriends: [UserModel] = try await db.fetchList(collection: Collection.users) { ref in
                 ref.whereField("uid", in: currentUser.friendUIDs)
             }
+            // Filter out admin users from friends list (they should never be shown)
+            friends = fetchedFriends.filter { $0.role != .admin }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -57,9 +59,10 @@ final class FriendsViewModel: ObservableObject {
                 return nameContains || emailContains
             }
 
-            // Filter out current user, sort by relevance (suspended users shown but marked)
+            // Filter out current user AND admin users, sort by relevance (suspended users shown but marked)
+            // IMPORTANT: Admin users should NEVER appear in search results
             searchResults = filteredUsers
-                .filter { $0.uid != currentUID }
+                .filter { $0.uid != currentUID && $0.role != .admin }
                 .sorted { user1, user2 in
                     let name1Lower = user1.displayName.lowercased()
                     let name2Lower = user2.displayName.lowercased()
@@ -96,6 +99,13 @@ final class FriendsViewModel: ObservableObject {
     // MARK: - Send friend request
     func sendRequest(from current: UserModel, to target: UserModel) async {
         print("📤 [FriendsVM] Sending friend request from \(current.displayName) to \(target.displayName)")
+
+        // Check if target is admin (admin cannot be added as friend)
+        if target.role == .admin {
+            print("⚠️ [FriendsVM] Cannot send friend request to admin user")
+            errorMessage = "Tidak dapat menambahkan pengguna ini sebagai teman"
+            return
+        }
 
         // Check if already friends
         if current.friendUIDs.contains(target.uid) {
@@ -470,6 +480,12 @@ final class FriendsViewModel: ObservableObject {
 
             guard let targetUser = users.first else {
                 errorMessage = "Pengguna dengan email tersebut tidak ditemukan"
+                return
+            }
+
+            // Check if target is admin (admin cannot be added as friend)
+            if targetUser.role == .admin {
+                errorMessage = "Tidak dapat menambahkan pengguna ini sebagai teman"
                 return
             }
 

@@ -10,25 +10,19 @@ struct InviteMemberSheetView: View {
     @StateObject private var friendsVM = FriendsViewModel()
 
     @State private var searchQuery = ""
-    @State private var selectedTab: SearchTab = .friends
     @State private var selectedMembers: Set<String> = []
     @State private var isInviting = false
-
-    enum SearchTab: String, CaseIterable {
-        case friends = "Teman"
-        case search = "Pencarian"
-    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Search bar
-                searchBar
+                // Header with subtitle
+                headerSection
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
 
-                // Segmented Control
-                segmentedControl
+                // Search bar
+                searchBar
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
 
@@ -37,21 +31,16 @@ struct InviteMemberSheetView: View {
                     selectedMembersChips
                 }
 
-                // Results list
+                // Friends list
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 0) {
-                        if selectedTab == .friends {
-                            friendsList
-                        } else {
-                            searchResults
-                        }
+                        friendsList
                     }
                     .padding(.horizontal, 20)
                 }
                 .scrollDismissesKeyboard(.immediately)
                 .simultaneousGesture(
                     TapGesture().onEnded { _ in
-                        // Dismiss keyboard when tapping anywhere
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     }
                 )
@@ -77,23 +66,31 @@ struct InviteMemberSheetView: View {
         }
     }
 
+    // MARK: - Header Section
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Daftar Teman")
+                .font(AppFont.headline())
+                .foregroundColor(.textPrimary)
+
+            Text("Kamu hanya bisa mengundang orang yang sudah menjadi temanmu")
+                .font(AppFont.caption())
+                .foregroundColor(.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     // MARK: - Search Bar
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 16))
                 .foregroundColor(.textPrimary.opacity(0.35))
-            TextField("Cari berdasarkan email atau nama...", text: $searchQuery)
+            TextField("Cari nama teman...", text: $searchQuery)
                 .font(AppFont.subheadline())
                 .foregroundColor(.textPrimary)
                 .autocapitalization(.none)
                 .autocorrectionDisabled()
-                .onChange(of: searchQuery) { newValue in
-                    if !newValue.isEmpty && selectedTab == .search {
-                        guard let uid = authVM.currentUser?.uid else { return }
-                        Task { await friendsVM.searchUsers(query: newValue, currentUID: uid) }
-                    }
-                }
             if !searchQuery.isEmpty {
                 Button { searchQuery = "" } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -108,45 +105,12 @@ struct InviteMemberSheetView: View {
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
-    // MARK: - Segmented Control
-    private var segmentedControl: some View {
-        HStack(spacing: 0) {
-            ForEach(SearchTab.allCases, id: \.self) { tab in
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selectedTab = tab
-                        // Clear search when switching tabs
-                        if tab == .friends {
-                            searchQuery = ""
-                        }
-                    }
-                } label: {
-                    Text(tab.rawValue)
-                        .font(AppFont.subheadline())
-                        .fontWeight(selectedTab == tab ? .semibold : .regular)
-                        .foregroundColor(selectedTab == tab ? .white : .textPrimary.opacity(0.6))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            selectedTab == tab ?
-                                AnyShapeStyle(LinearGradient.brandGradient) :
-                                AnyShapeStyle(Color.clear)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                }
-            }
-        }
-        .padding(4)
-        .background(Color.textPrimary.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-    }
-
     // MARK: - Selected Members Chips
     private var selectedMembersChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(Array(selectedMembers), id: \.self) { uid in
-                    if let user = getUser(by: uid) {
+                    if let user = friendsVM.friends.first(where: { $0.uid == uid }) {
                         HStack(spacing: 6) {
                             Text(user.initials)
                                 .font(AppFont.caption2())
@@ -180,29 +144,13 @@ struct InviteMemberSheetView: View {
     // MARK: - Friends List
     private var friendsList: some View {
         Group {
-            if filteredFriends.isEmpty {
+            if friendsVM.friends.isEmpty {
                 emptyFriendsState
+            } else if filteredFriends.isEmpty && !searchQuery.isEmpty {
+                noResultsState
             } else {
                 ForEach(filteredFriends) { friend in
                     userRow(friend)
-                }
-            }
-        }
-    }
-
-    // MARK: - Search Results
-    private var searchResults: some View {
-        Group {
-            if searchQuery.isBlank {
-                emptySearchState
-            } else if friendsVM.isLoading {
-                ProgressView()
-                    .padding(.top, 40)
-            } else if friendsVM.searchResults.isEmpty {
-                noResultsState
-            } else {
-                ForEach(friendsVM.searchResults) { user in
-                    userRow(user)
                 }
             }
         }
@@ -213,6 +161,7 @@ struct InviteMemberSheetView: View {
         let isSelected = selectedMembers.contains(user.uid)
         let isCurrentUser = user.uid == authVM.currentUser?.uid
         let isMember = trip.members.contains(where: { $0.uid == user.uid })
+        let isPending = trip.members.contains(where: { $0.uid == user.uid && $0.role == .pending })
         let isSuspended = user.isSuspended
 
         return HStack(spacing: 12) {
@@ -256,17 +205,24 @@ struct InviteMemberSheetView: View {
                     .font(AppFont.caption2())
                     .foregroundColor(.textPrimary.opacity(0.4))
             } else if isSuspended {
-                // Suspended users cannot be invited
                 Image(systemName: "nosign")
                     .font(.system(size: 20))
                     .foregroundColor(.errorRed.opacity(0.5))
-            } else if isMember {
+            } else if isMember && !isPending {
                 Text("Sudah Anggota")
                     .font(AppFont.caption2())
                     .foregroundColor(.successGreen)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.successGreen.opacity(0.15))
+                    .clipShape(Capsule())
+            } else if isPending {
+                Text("Menunggu")
+                    .font(AppFont.caption2())
+                    .foregroundColor(.warningAmber)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.warningAmber.opacity(0.15))
                     .clipShape(Capsule())
             } else {
                 Button {
@@ -288,7 +244,6 @@ struct InviteMemberSheetView: View {
     // MARK: - Bottom Buttons
     private var bottomButtons: some View {
         VStack(spacing: 10) {
-            // Invite button
             Button {
                 Task { await inviteSelectedMembers() }
             } label: {
@@ -324,50 +279,29 @@ struct InviteMemberSheetView: View {
         .padding(.vertical, 60)
     }
 
-    private var emptySearchState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 40))
-                .foregroundColor(.textSecondary.opacity(0.3))
-            Text("Cari Pengguna")
-                .font(AppFont.headline())
-                .foregroundColor(.textPrimary)
-            Text("Ketik username untuk mencari pengguna")
-                .font(AppFont.subheadline())
-                .foregroundColor(.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
-    }
-
     private var noResultsState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "person.crop.circle.badge.questionmark")
+            Text("🔍")
                 .font(.system(size: 40))
-                .foregroundColor(.textSecondary.opacity(0.3))
             Text("Tidak Ditemukan")
                 .font(AppFont.headline())
-                .foregroundColor(.textPrimary)
-            Text("Tidak ada pengguna dengan nama atau email tersebut")
-                .font(AppFont.subheadline())
-                .foregroundColor(.textSecondary)
+                .foregroundColor(.textPrimary.opacity(0.6))
+            Text("Tidak ada teman dengan nama tersebut")
+                .font(AppFont.footnote())
+                .foregroundColor(.textPrimary.opacity(0.4))
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 60)
+        .padding(.vertical, 60)
     }
 
     // MARK: - Helper Functions
     private var filteredFriends: [UserModel] {
         let allFriends = friendsVM.friends
 
-        // Filter out current user and existing members
+        // Filter out current user and admin users, but KEEP existing members (to show "Sudah Anggota")
         let filtered = allFriends.filter { friend in
-            friend.uid != authVM.currentUser?.uid &&
-            !trip.members.contains(where: { $0.uid == friend.uid })
+            friend.uid != authVM.currentUser?.uid && friend.role != .admin
         }
 
         // Apply search filter if query exists
@@ -381,26 +315,13 @@ struct InviteMemberSheetView: View {
         }
     }
 
-    private func getUser(by uid: String) -> UserModel? {
-        if selectedTab == .friends {
-            return friendsVM.friends.first(where: { $0.uid == uid })
-        } else {
-            return friendsVM.searchResults.first(where: { $0.uid == uid })
-        }
-    }
-
     private func inviteSelectedMembers() async {
         guard let owner = authVM.currentUser else { return }
         isInviting = true
         defer { isInviting = false }
 
-        // Get all selected users
-        var users: [UserModel] = []
-        for uid in selectedMembers {
-            if let user = getUser(by: uid) {
-                users.append(user)
-            }
-        }
+        // Get all selected users from friends list
+        let users = friendsVM.friends.filter { selectedMembers.contains($0.uid) }
 
         // Invite each user
         for user in users {
