@@ -100,4 +100,20 @@ final class FirestoreService {
     func newDocRef(collection: String) -> DocumentReference {
         db.collection(collection).document()
     }
+
+    // MARK: - Suspended members
+    /// Returns the UIDs of suspended users among the given trip member UIDs.
+    func fetchSuspendedMemberUIDs(memberUIDs: [String]) async throws -> Set<String> {
+        guard !memberUIDs.isEmpty else { return [] }
+        let snapshot = try await db.collection(Collection.users)
+            .whereField("uid", in: memberUIDs)
+            .getDocuments()
+
+        let suspended = snapshot.documents.compactMap { doc -> String? in
+            guard let user = try? doc.data(as: UserModel.self),
+                  user.isSuspended else { return nil }
+            return user.uid
+        }
+        return Set(suspended)
+    }
 }

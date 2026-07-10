@@ -470,18 +470,7 @@ struct TripDetailView: View {
         guard !memberUIDs.isEmpty else { return }
 
         do {
-            let db = FirestoreService.shared.db
-            let snapshot = try await db.collection(Collection.users)
-                .whereField("uid", in: memberUIDs)
-                .getDocuments()
-
-            let suspended = snapshot.documents.compactMap { doc -> String? in
-                guard let user = try? doc.data(as: UserModel.self),
-                      user.isSuspended else { return nil }
-                return user.uid
-            }
-
-            suspendedMemberUIDs = Set(suspended)
+            suspendedMemberUIDs = try await FirestoreService.shared.fetchSuspendedMemberUIDs(memberUIDs: memberUIDs)
         } catch {
             print("Error loading suspended members: \(error)")
         }
