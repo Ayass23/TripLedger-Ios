@@ -36,31 +36,11 @@ extension Color {
 
 // MARK: - Hex Support
 extension Color {
+    /// Delegates to the canonical `Color(hex:)` initializer in Extensions.swift.
+    /// All call sites use 6-digit "#RRGGBB" constants, for which both parsers
+    /// produce identical colors.
     static func hex(_ hex: String) -> Color {
-        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: cleaned).scanHexInt64(&int)
-        
-        let r, g, b: UInt64
-        
-        switch cleaned.count {
-        case 6:
-            r = (int >> 16) & 0xFF
-            g = (int >> 8) & 0xFF
-            b = int & 0xFF
-        default:
-            r = 255
-            g = 255
-            b = 255
-        }
-        
-        return Color(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: 1
-        )
+        Color(hex: hex)
     }
 }
 

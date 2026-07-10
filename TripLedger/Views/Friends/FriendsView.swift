@@ -381,6 +381,8 @@ struct FriendRequestRow: View {
         .tint(.brandPrimary)
     }
 
+    // Sengaja tidak memakai Date.timeAgo(): versi ini tetap menampilkan "N hari lalu"
+    // untuk tanggal lama, sedangkan Date.timeAgo() beralih ke format tanggal setelah 7 hari.
     private func timeAgo(from timestamp: Timestamp) -> String {
         let date = timestamp.dateValue()
         let interval = Date().timeIntervalSince(date)

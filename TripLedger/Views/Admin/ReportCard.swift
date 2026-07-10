@@ -88,6 +88,8 @@ struct ReportCard: View {
         }
     }
 
+    // Sengaja tidak memakai Date.timeAgo(): versi ini tetap menampilkan "N hari lalu"
+    // untuk tanggal lama, sedangkan Date.timeAgo() beralih ke format tanggal setelah 7 hari.
     private func timeAgo(from date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
         let minutes = Int(interval / 60)

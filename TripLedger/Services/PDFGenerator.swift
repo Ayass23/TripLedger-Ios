@@ -792,12 +792,7 @@ class PDFGenerator {
     // MARK: - Helper Functions
 
     private static func formatCurrency(_ amount: Double, symbol: String) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = "."
-        formatter.maximumFractionDigits = 0
-        let formatted = formatter.string(from: NSNumber(value: amount)) ?? "\(Int(amount))"
-        return "\(symbol) \(formatted)"
+        amount.toCurrency(symbol: symbol)
     }
 
     private static func formatAmount(_ amount: Double) -> String {
