@@ -1,13 +1,5 @@
 import SwiftUI
 
-// MARK: - Model for storing custom split per participant
-struct ParticipantSplitDetail: Identifiable, Hashable {
-    let id: String
-    let name: String
-    var portion: Int  // Number of portions (for portion mode)
-    var customAmount: Double  // Custom amount (for price mode)
-}
-
 // MARK: - Atur Pembagian View
 struct AturPembagianView: View {
     @Environment(\.dismiss) var dismiss

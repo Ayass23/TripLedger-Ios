@@ -12,6 +12,14 @@ struct ItemEntry: Identifiable {
     var customSplits: [String: ParticipantSplitDetail] = [:]  // Custom split per participant
 }
 
+// MARK: - Custom split per participant (per item)
+struct ParticipantSplitDetail: Identifiable, Hashable {
+    let id: String
+    let name: String
+    var portion: Int  // Number of portions (for portion mode)
+    var customAmount: Double  // Custom amount (for price mode)
+}
+
 // MARK: - Bill Split Mode (Step 3)
 // "Bagi Rata" = equal split per person; "Input Manual" = item-based assignment.
 enum BillSplitMode: String, CaseIterable {
