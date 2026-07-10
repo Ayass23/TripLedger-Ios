@@ -1201,50 +1201,6 @@ struct StatCardCompact: View {
     }
 }
 
-// MARK: - Stat Card Component (Legacy - kept for compatibility)
-struct StatCard: View {
-    let icon: String
-    let title: String
-    let value: String
-    let gradient: [Color]
-
-    var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: gradient,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-            }
-
-            VStack(spacing: 4) {
-                Text(value)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(.textPrimary)
-
-                Text(title)
-                    .font(AppFont.caption2())
-                    .foregroundColor(.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: Color.black.opacity(0.06), radius: 10, y: 4)
-    }
-}
-
 // MARK: - User Management Card
 struct UserManagementCard: View {
     let user: UserModel
