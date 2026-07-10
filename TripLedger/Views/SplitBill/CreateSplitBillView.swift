@@ -97,14 +97,6 @@ struct CreateSplitBillView: View {
     @State private var loadingMessage = ""
 
     // Step 3: Item-based Splits
-    struct ItemEntry: Identifiable {
-        let id = UUID()
-        var name: String
-        var price: Double
-        var quantity: Int = 1
-        var selectedParticipantIDs: Set<String> = []  // IDs of participants who bought this item
-        var customSplits: [String: ParticipantSplitDetail] = [:]  // Custom split per participant
-    }
     @State private var items: [ItemEntry] = []
     @State private var showEditItem: ItemEntry?  // Item being edited
     @State private var showAddItem = false  // Show add item sheet
@@ -114,44 +106,21 @@ struct CreateSplitBillView: View {
     @State private var editingItemQuantity = 1
 
     // Split Mode for Step 3
-    enum SplitMode: String, CaseIterable {
-        case bagiRata = "Bagi Rata"
-        case inputManual = "Input Manual"
-    }
-    @State private var splitMode: SplitMode = .bagiRata
+    @State private var splitMode: BillSplitMode = .bagiRata
     @State private var participantAmounts: [String: String] = [:]  // participantID -> amount string
 
     private var activeParticipants: [ParticipantEntry] { participants.filter { $0.isSelected } }
 
     // Calculate how much each participant owes based on their item selections
     private func calculateParticipantAmount(_ participantID: String) -> Double {
-        var itemTotal: Double = 0
-
-        // Calculate items
-        for item in items {
-            if item.selectedParticipantIDs.contains(participantID) {
-                // Check if custom split exists for this item and participant
-                if let customSplit = item.customSplits[participantID], !item.customSplits.isEmpty {
-                    itemTotal += customSplit.customAmount
-                } else {
-                    // Default: equal split
-                    let shareCount = item.selectedParticipantIDs.count
-                    if shareCount > 0 {
-                        itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
-                    }
-                }
-            }
-        }
-
-        // Add proportional tax, service charge, rounding, and subtract proportional discount
-        let itemsTotal = items.reduce(0.0) { $0 + ($1.price * Double($1.quantity)) }
-        if itemsTotal > 0 {
-            let proportion = itemTotal / itemsTotal
-            itemTotal += (taxAmount + serviceCharge + rounding) * proportion
-            itemTotal -= discount * proportion
-        }
-
-        return itemTotal
+        BillSplitCalculator.participantAmount(
+            for: participantID,
+            items: items,
+            taxAmount: taxAmount,
+            serviceCharge: serviceCharge,
+            rounding: rounding,
+            discount: discount
+        )
     }
 
     private var calculatedTotal: Double {
@@ -185,11 +154,7 @@ struct CreateSplitBillView: View {
 
     // MARK: - Bagi Rata Mode Helpers
     private func parseAmount(_ str: String) -> Double {
-        let cleaned = str
-            .replacingOccurrences(of: ".", with: "")
-            .replacingOccurrences(of: ",", with: "")
-            .trimmingCharacters(in: .whitespaces)
-        return Double(cleaned) ?? 0
+        BillSplitCalculator.parseAmount(str)
     }
 
     private var bagiRataTotalInput: Double {
@@ -213,20 +178,12 @@ struct CreateSplitBillView: View {
     }
 
     private func distributeEvenly() {
-        let count = activeParticipants.count
-        guard count > 0 else { return }
-        let evenAmount = totalAmount / Double(count)
-        let roundedAmount = floor(evenAmount)  // Round down to avoid exceeding total
-
-        for (index, participant) in activeParticipants.enumerated() {
-            if index == activeParticipants.count - 1 {
-                // Last person gets the remainder to ensure exact total
-                let currentTotal = Double(activeParticipants.count - 1) * roundedAmount
-                let remainder = totalAmount - currentTotal
-                participantAmounts[participant.id] = String(Int(remainder))
-            } else {
-                participantAmounts[participant.id] = String(Int(roundedAmount))
-            }
+        let distributed = BillSplitCalculator.evenDistribution(
+            total: totalAmount,
+            participantIDs: activeParticipants.map { $0.id }
+        )
+        for (participantID, amount) in distributed {
+            participantAmounts[participantID] = amount
         }
     }
 
@@ -539,7 +496,7 @@ struct CreateSplitBillView: View {
     private var step1View: some View {
         VStack(alignment: .leading, spacing: 24) {
             if source == .scan, let result = scannedResult {
-                scanResultBanner(result)
+                ScanResultBanner(result: result)
             }
 
             // Foto Struk (only for manual input)
@@ -919,7 +876,7 @@ struct CreateSplitBillView: View {
 
                 // Split Mode Selector (only for manual source)
                 HStack(spacing: 0) {
-                    ForEach(SplitMode.allCases, id: \.self) { mode in
+                    ForEach(BillSplitMode.allCases, id: \.self) { mode in
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 splitMode = mode
@@ -1715,66 +1672,6 @@ struct CreateSplitBillView: View {
             }
             .padding(20)
             .background(Color.baseFallback)
-        }
-    }
-
-    // MARK: - Scan Result Banner
-    private func scanResultBanner(_ result: OCRResult) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 20))
-                .foregroundColor(.successGreen)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Struk berhasil di-scan")
-                    .font(AppFont.subheadline())
-                    .foregroundColor(.textPrimary)
-
-                if let parsed = result.parsedReceipt {
-                    // Show AI-parsed summary
-                    HStack(spacing: 4) {
-                        Text("\(parsed.billName) •")
-                            .font(AppFont.caption())
-                            .foregroundColor(.textPrimary.opacity(0.7))
-                        Text("\(parsed.currency) \(Int(parsed.totalAmount).description)")
-                            .font(AppFont.caption())
-                            .foregroundColor(.successGreen)
-                        if let cat = parsed.category {
-                            Text("• \(cat)")
-                                .font(AppFont.caption())
-                                .foregroundColor(.textPrimary.opacity(0.7))
-                        }
-                    }
-
-                    if !parsed.items.isEmpty {
-                        Text("\(parsed.items.count) item terdeteksi")
-                            .font(AppFont.caption2())
-                            .foregroundColor(.textPrimary.opacity(0.5))
-                    }
-                } else if let amt = result.parsedAmount {
-                    // Fallback to basic OCR parsing
-                    Text("Total terdeteksi: \(Int(amt).description)")
-                        .font(AppFont.caption())
-                        .foregroundColor(.successGreen)
-                }
-            }
-            Spacer()
-        }
-        .padding(14)
-        .background(Color.successGreen.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.md)
-                .stroke(Color.successGreen.opacity(0.2), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Field Section
-    private func fieldSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(AppFont.subheadline())
-                .foregroundColor(.textPrimary.opacity(0.6))
-            content()
         }
     }
 

@@ -60,14 +60,6 @@ struct AddExpenseView: View {
     private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) && paidByParticipant != nil }
 
     // Step 3: Item-based Splits
-    struct ItemEntry: Identifiable {
-        let id = UUID()
-        var name: String
-        var price: Double
-        var quantity: Int = 1
-        var selectedParticipantIDs: Set<String> = []
-        var customSplits: [String: ParticipantSplitDetail] = [:]  // Custom split per participant
-    }
     @State private var items: [ItemEntry] = []
     @State private var showEditItem: ItemEntry?
     @State private var showAddItem = false
@@ -78,33 +70,15 @@ struct AddExpenseView: View {
     @State private var suspendedMemberUIDs: Set<String> = []
 
     // Split Mode for Step 3
-    enum SplitMode: String, CaseIterable {
-        case bagiRata = "Bagi Rata"
-        case inputManual = "Input Manual"
-    }
-    @State private var splitMode: SplitMode = .bagiRata
+    @State private var splitMode: BillSplitMode = .bagiRata
     @State private var participantAmounts: [String: String] = [:]  // participantID -> amount string
 
     private var activeParticipants: [ParticipantEntry] { participants.filter { $0.isSelected } }
 
     // Calculate how much each participant owes based on their item selections
     private func calculateParticipantAmount(_ participantID: String) -> Double {
-        var itemTotal: Double = 0
-        for item in items {
-            if item.selectedParticipantIDs.contains(participantID) {
-                // Check if custom split exists for this item and participant
-                if let customSplit = item.customSplits[participantID], !item.customSplits.isEmpty {
-                    itemTotal += customSplit.customAmount
-                } else {
-                    // Default: equal split
-                    let shareCount = item.selectedParticipantIDs.count
-                    if shareCount > 0 {
-                        itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
-                    }
-                }
-            }
-        }
-        return itemTotal
+        // No additional charges in this flow: defaults keep the item total unchanged
+        BillSplitCalculator.participantAmount(for: participantID, items: items)
     }
 
     private var calculatedTotal: Double {
@@ -135,11 +109,7 @@ struct AddExpenseView: View {
 
     // MARK: - Bagi Rata Mode Helpers
     private func parseAmount(_ str: String) -> Double {
-        let cleaned = str
-            .replacingOccurrences(of: ".", with: "")
-            .replacingOccurrences(of: ",", with: "")
-            .trimmingCharacters(in: .whitespaces)
-        return Double(cleaned) ?? 0
+        BillSplitCalculator.parseAmount(str)
     }
 
     private var bagiRataTotalInput: Double {
@@ -163,19 +133,12 @@ struct AddExpenseView: View {
     }
 
     private func distributeEvenly() {
-        let count = activeParticipants.count
-        guard count > 0 else { return }
-        let evenAmount = amount / Double(count)
-        let roundedAmount = floor(evenAmount)
-
-        for (index, participant) in activeParticipants.enumerated() {
-            if index == activeParticipants.count - 1 {
-                let currentTotal = Double(activeParticipants.count - 1) * roundedAmount
-                let remainder = amount - currentTotal
-                participantAmounts[participant.id] = String(Int(remainder))
-            } else {
-                participantAmounts[participant.id] = String(Int(roundedAmount))
-            }
+        let distributed = BillSplitCalculator.evenDistribution(
+            total: amount,
+            participantIDs: activeParticipants.map { $0.id }
+        )
+        for (participantID, value) in distributed {
+            participantAmounts[participantID] = value
         }
     }
 
@@ -700,7 +663,7 @@ struct AddExpenseView: View {
 
                 // Split Mode Selector (only for manual source)
                 HStack(spacing: 0) {
-                    ForEach(SplitMode.allCases, id: \.self) { mode in
+                    ForEach(BillSplitMode.allCases, id: \.self) { mode in
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 splitMode = mode
@@ -1381,14 +1344,6 @@ struct AddExpenseView: View {
     }
     
     // MARK: - Helpers
-    private func fieldSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(AppFont.subheadline())
-                .foregroundColor(.textPrimary.opacity(0.6))
-            content()
-        }
-    }
 
     private func formatTransactionDate(_ date: Date) -> String {
         let formatter = DateFormatter()

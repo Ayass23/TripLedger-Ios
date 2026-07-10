@@ -90,14 +90,6 @@ struct CreateExpenseFromReceiptView: View {
     private var isStep2Valid: Bool { participants.contains(where: { $0.isSelected }) && paidByParticipant != nil }
 
     // Step 3: Item-based Splits
-    struct ItemEntry: Identifiable {
-        let id = UUID()
-        var name: String
-        var price: Double
-        var quantity: Int = 1
-        var selectedParticipantIDs: Set<String> = []
-        var customSplits: [String: ParticipantSplitDetail] = [:]  // Custom split per participant
-    }
     @State private var items: [ItemEntry] = []
     @State private var showEditItem: ItemEntry?
     @State private var showAddItem = false
@@ -111,31 +103,14 @@ struct CreateExpenseFromReceiptView: View {
 
     // Calculate how much each participant owes based on their item selections
     private func calculateParticipantAmount(_ participantID: String) -> Double {
-        var itemTotal: Double = 0
-        for item in items {
-            if item.selectedParticipantIDs.contains(participantID) {
-                // Check if custom split exists for this item and participant
-                if let customSplit = item.customSplits[participantID], !item.customSplits.isEmpty {
-                    itemTotal += customSplit.customAmount
-                } else {
-                    // Default: equal split
-                    let shareCount = item.selectedParticipantIDs.count
-                    if shareCount > 0 {
-                        itemTotal += (item.price * Double(item.quantity)) / Double(shareCount)
-                    }
-                }
-            }
-        }
-
-        // Add proportional tax, service charge, rounding, and subtract proportional discount
-        let itemsTotal = items.reduce(0.0) { $0 + ($1.price * Double($1.quantity)) }
-        if itemsTotal > 0 {
-            let proportion = itemTotal / itemsTotal
-            itemTotal += (taxAmount + serviceCharge + rounding) * proportion
-            itemTotal -= discount * proportion
-        }
-
-        return itemTotal
+        BillSplitCalculator.participantAmount(
+            for: participantID,
+            items: items,
+            taxAmount: taxAmount,
+            serviceCharge: serviceCharge,
+            rounding: rounding,
+            discount: discount
+        )
     }
 
     private var calculatedTotal: Double {
@@ -400,7 +375,7 @@ struct CreateExpenseFromReceiptView: View {
     private var step1View: some View {
         VStack(alignment: .leading, spacing: 24) {
             if let result = scannedResult {
-                scanResultBanner(result)
+                ScanResultBanner(result: result)
             }
 
             // Nama Pengeluaran
@@ -1259,66 +1234,6 @@ struct CreateExpenseFromReceiptView: View {
             }
             .padding(20)
             .background(Color.baseFallback)
-        }
-    }
-
-    // MARK: - Scan Result Banner
-    private func scanResultBanner(_ result: OCRResult) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 20))
-                .foregroundColor(.successGreen)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Struk berhasil di-scan")
-                    .font(AppFont.subheadline())
-                    .foregroundColor(.textPrimary)
-
-                if let parsed = result.parsedReceipt {
-                    // Show AI-parsed summary
-                    HStack(spacing: 4) {
-                        Text("\(parsed.billName) •")
-                            .font(AppFont.caption())
-                            .foregroundColor(.textPrimary.opacity(0.7))
-                        Text("\(parsed.currency) \(Int(parsed.totalAmount).description)")
-                            .font(AppFont.caption())
-                            .foregroundColor(.successGreen)
-                        if let cat = parsed.category {
-                            Text("• \(cat)")
-                                .font(AppFont.caption())
-                                .foregroundColor(.textPrimary.opacity(0.7))
-                        }
-                    }
-
-                    if !parsed.items.isEmpty {
-                        Text("\(parsed.items.count) item terdeteksi")
-                            .font(AppFont.caption2())
-                            .foregroundColor(.textPrimary.opacity(0.5))
-                    }
-                } else if let amt = result.parsedAmount {
-                    // Fallback to basic OCR parsing
-                    Text("Total terdeteksi: \(Int(amt).description)")
-                        .font(AppFont.caption())
-                        .foregroundColor(.successGreen)
-                }
-            }
-            Spacer()
-        }
-        .padding(14)
-        .background(Color.successGreen.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.md)
-                .stroke(Color.successGreen.opacity(0.2), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Field Section
-    private func fieldSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(AppFont.subheadline())
-                .foregroundColor(.textPrimary.opacity(0.6))
-            content()
         }
     }
 
