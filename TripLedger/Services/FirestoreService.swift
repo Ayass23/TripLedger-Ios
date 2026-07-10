@@ -67,11 +67,11 @@ final class FirestoreService {
         let ref: Query = queryBuilder?(db.collection(collection)) ?? db.collection(collection)
         return ref.addSnapshotListener { snap, error in
             if let error = error {
-                print("❌ [FirestoreService] Listener error for \(collection)")
-                print("   Error Code: \((error as NSError).code)")
-                print("   Error Domain: \((error as NSError).domain)")
-                print("   Description: \(error.localizedDescription)")
-                print("   Full Error: \(error)")
+                AppLog.debug("❌ [FirestoreService] Listener error for \(collection)")
+                AppLog.debug("   Error Code: \((error as NSError).code)")
+                AppLog.debug("   Error Domain: \((error as NSError).domain)")
+                AppLog.debug("   Description: \(error.localizedDescription)")
+                AppLog.debug("   Full Error: \(error)")
                 onChange([])
                 return
             }
@@ -88,7 +88,7 @@ final class FirestoreService {
                     // This is necessary because Firestore decoder doesn't always populate it
                     return item
                 } catch {
-                    print("⚠️ [FirestoreService] Failed to decode document \(doc.documentID) in \(collection): \(error.localizedDescription)")
+                    AppLog.debug("⚠️ [FirestoreService] Failed to decode document \(doc.documentID) in \(collection): \(error.localizedDescription)")
                     return nil
                 }
             }

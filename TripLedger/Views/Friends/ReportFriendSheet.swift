@@ -205,11 +205,11 @@ struct ReportFriendSheet: View {
 
         do {
             try db.db.collection(Collection.reports).document(docRef.documentID).setData(from: report)
-            print("✅ [ReportFriend] Report submitted for \(friend.displayName)")
+            AppLog.debug("✅ [ReportFriend] Report submitted for \(friend.displayName)")
 
             showSuccessAlert = true
         } catch {
-            print("❌ [ReportFriend] Error submitting report: \(error)")
+            AppLog.debug("❌ [ReportFriend] Error submitting report: \(error)")
         }
     }
 }

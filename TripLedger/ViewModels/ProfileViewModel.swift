@@ -86,9 +86,9 @@ final class ProfileViewModel: ObservableObject {
                     ])
                 }
             }
-            print("✅ [ProfileVM] Synced display name across \(snapshot.documents.count) trips")
+            AppLog.debug("✅ [ProfileVM] Synced display name across \(snapshot.documents.count) trips")
         } catch {
-            print("⚠️ [ProfileVM] Error syncing display name across trips: \(error)")
+            AppLog.debug("⚠️ [ProfileVM] Error syncing display name across trips: \(error)")
         }
     }
 
@@ -133,9 +133,9 @@ final class ProfileViewModel: ObservableObject {
                     ])
                 }
             }
-            print("✅ [ProfileVM] Synced avatar URL across \(snapshot.documents.count) trips")
+            AppLog.debug("✅ [ProfileVM] Synced avatar URL across \(snapshot.documents.count) trips")
         } catch {
-            print("⚠️ [ProfileVM] Error syncing avatar URL across trips: \(error)")
+            AppLog.debug("⚠️ [ProfileVM] Error syncing avatar URL across trips: \(error)")
         }
     }
 
@@ -197,9 +197,9 @@ final class ProfileViewModel: ObservableObject {
                     ])
                 }
             }
-            print("✅ [ProfileVM] Synced display name across expenses")
+            AppLog.debug("✅ [ProfileVM] Synced display name across expenses")
         } catch {
-            print("⚠️ [ProfileVM] Error syncing display name across expenses: \(error)")
+            AppLog.debug("⚠️ [ProfileVM] Error syncing display name across expenses: \(error)")
         }
     }
 
@@ -210,28 +210,28 @@ final class ProfileViewModel: ObservableObject {
 
         do {
             // Step 1: Fetch current user data from Firestore untuk get avatarPublicID yang latest
-            print("🔍 [ProfileVM] Fetching current user data to get old avatar path...")
+            AppLog.debug("🔍 [ProfileVM] Fetching current user data to get old avatar path...")
             let currentUser: UserModel = try await db.fetch(collection: Collection.users, documentID: uid)
             let oldPath = currentUser.avatarPublicID
 
-            print("📊 [ProfileVM] Current avatarPublicID from Firestore: \(oldPath ?? "nil")")
+            AppLog.debug("📊 [ProfileVM] Current avatarPublicID from Firestore: \(oldPath ?? "nil")")
 
             // Step 2: Delete old avatar if exists
             if let oldPath = oldPath, !oldPath.isEmpty {
-                print("🗑️  [ProfileVM] Deleting old avatar: \(oldPath)")
+                AppLog.debug("🗑️  [ProfileVM] Deleting old avatar: \(oldPath)")
                 do {
                     try await storage.deleteImage(fullPath: oldPath)
-                    print("✅ [ProfileVM] Old avatar deleted successfully")
+                    AppLog.debug("✅ [ProfileVM] Old avatar deleted successfully")
                 } catch {
                     // Log error but continue with upload
-                    print("⚠️ [ProfileVM] Failed to delete old avatar: \(error.localizedDescription)")
+                    AppLog.debug("⚠️ [ProfileVM] Failed to delete old avatar: \(error.localizedDescription)")
                 }
             } else {
-                print("ℹ️ [ProfileVM] No old avatar to delete (first upload)")
+                AppLog.debug("ℹ️ [ProfileVM] No old avatar to delete (first upload)")
             }
 
             // Step 3: Upload new avatar to Firebase Storage
-            print("📤 [ProfileVM] Uploading new avatar to Firebase Storage")
+            AppLog.debug("📤 [ProfileVM] Uploading new avatar to Firebase Storage")
             let response = try await storage.uploadImage(
                 image,
                 folder: "profile_pictures",
@@ -253,17 +253,17 @@ final class ProfileViewModel: ObservableObject {
             // Step 6: Sync avatar URL across trips
             await syncAvatarURLAcrossTrips(uid: uid, newAvatarURL: response.downloadURL)
 
-            print("✅ [ProfileVM] Avatar uploaded successfully")
-            print("   URL: \(response.downloadURL)")
-            print("   Storage Path: \(response.fullPath)")
+            AppLog.debug("✅ [ProfileVM] Avatar uploaded successfully")
+            AppLog.debug("   URL: \(response.downloadURL)")
+            AppLog.debug("   Storage Path: \(response.fullPath)")
 
             successMessage = "Foto profil berhasil diperbarui."
 
         } catch let error as StorageError {
-            print("❌ [ProfileVM] Storage error: \(error.localizedDescription)")
+            AppLog.debug("❌ [ProfileVM] Storage error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         } catch {
-            print("❌ [ProfileVM] Upload error: \(error.localizedDescription)")
+            AppLog.debug("❌ [ProfileVM] Upload error: \(error.localizedDescription)")
             errorMessage = "Upload gagal: \(error.localizedDescription)"
         }
     }

@@ -42,7 +42,7 @@ struct CreateSplitBillView: View {
             .replacingOccurrences(of: ",", with: "")  // Remove any commas
             .trimmingCharacters(in: .whitespaces)
         let amount = Double(cleaned) ?? 0
-        print("💰 [CreateSplitBillView] totalAmount computed: '\(amountStr)' → \(amount)")
+        AppLog.debug("💰 [CreateSplitBillView] totalAmount computed: '\(amountStr)' → \(amount)")
         return amount
     }
 
@@ -329,21 +329,21 @@ struct CreateSplitBillView: View {
 
     // MARK: - Setup & Handlers
     func setupForm() {
-            print("\n📋 [CreateSplitBillView] Initializing form...")
-            print("   📸 Received receiptImage: \(receiptImage != nil)")
-            print("   🔍 Received scannedResult: \(scannedResult != nil)")
+            AppLog.debug("\n📋 [CreateSplitBillView] Initializing form...")
+            AppLog.debug("   📸 Received receiptImage: \(receiptImage != nil)")
+            AppLog.debug("   🔍 Received scannedResult: \(scannedResult != nil)")
 
             // Auto-fill from AI-parsed receipt data
             if let result = scannedResult, let parsed = result.parsedReceipt {
-                print("✨ [CreateSplitBillView] Auto-filling from AI-parsed data:")
+                AppLog.debug("✨ [CreateSplitBillView] Auto-filling from AI-parsed data:")
 
                 // Fill bill name
                 title = parsed.billName
-                print("   📝 Title: \(parsed.billName)")
+                AppLog.debug("   📝 Title: \(parsed.billName)")
 
                 // Fill total amount
                 amountStr = String(Int(parsed.totalAmount))
-                print("   💰 Amount: \(parsed.currency) \(parsed.totalAmount)")
+                AppLog.debug("   💰 Amount: \(parsed.currency) \(parsed.totalAmount)")
 
                 // Fill currency
                 currency = parsed.currency
@@ -352,9 +352,9 @@ struct CreateSplitBillView: View {
                 if let cat = parsed.category {
                     if let expenseCategory = ExpenseCategory.fromString(cat) {
                         category = expenseCategory
-                        print("   🏷️  Category: \(cat) → \(expenseCategory.displayName)")
+                        AppLog.debug("   🏷️  Category: \(cat) → \(expenseCategory.displayName)")
                     } else {
-                        print("   ⚠️ Category '\(cat)' not mapped, using default")
+                        AppLog.debug("   ⚠️ Category '\(cat)' not mapped, using default")
                     }
                 }
 
@@ -363,7 +363,7 @@ struct CreateSplitBillView: View {
                     items = parsed.items.compactMap { receiptItem in
                         // Skip items without price (like plastic bags)
                         guard let price = receiptItem.price, price > 0 else {
-                            print("   ⚠️ Skipping item '\(receiptItem.name)' - no price")
+                            AppLog.debug("   ⚠️ Skipping item '\(receiptItem.name)' - no price")
                             return nil
                         }
                         return ItemEntry(
@@ -372,73 +372,73 @@ struct CreateSplitBillView: View {
                             quantity: receiptItem.quantity ?? 1
                         )
                     }
-                    print("   📦 Items: \(items.count) items loaded for splitting (filtered from \(parsed.items.count))")
+                    AppLog.debug("   📦 Items: \(items.count) items loaded for splitting (filtered from \(parsed.items.count))")
 
                     // If all items were filtered out (no valid prices), use total
                     if items.isEmpty {
                         items = [ItemEntry(name: "Total Tagihan", price: parsed.totalAmount, quantity: 1)]
-                        print("   ⚠️ All items had no price, using total as single item")
+                        AppLog.debug("   ⚠️ All items had no price, using total as single item")
                     }
                 } else {
                     // If no items, create a single "Total" item
                     items = [ItemEntry(name: "Total Tagihan", price: parsed.totalAmount, quantity: 1)]
-                    print("   ⚠️ No items found, using total as single item")
+                    AppLog.debug("   ⚠️ No items found, using total as single item")
                 }
 
                 // Fill tax, service charge, and discount
                 if let tax = parsed.taxAmount, tax > 0 {
                     taxAmountStr = String(Int(tax))
-                    print("   💳 Tax: \(currency) \(tax)")
+                    AppLog.debug("   💳 Tax: \(currency) \(tax)")
                 }
                 if let service = parsed.serviceCharge, service > 0 {
                     serviceChargeStr = String(Int(service))
-                    print("   🍽️  Service: \(currency) \(service)")
+                    AppLog.debug("   🍽️  Service: \(currency) \(service)")
                 }
                 if let disc = parsed.discount, disc > 0 {
                     discountStr = String(Int(disc))
-                    print("   🎟️  Discount: \(currency) \(disc)")
+                    AppLog.debug("   🎟️  Discount: \(currency) \(disc)")
                 }
                 if let round = parsed.rounding {
                     // Rounding can be negative
                     roundingStr = String(Int(round))
-                    print("   🔄 Rounding: \(currency) \(round)")
+                    AppLog.debug("   🔄 Rounding: \(currency) \(round)")
                 }
 
                 // Fill date if available
                 if let dateStr = parsed.date, let date = parseDate(dateStr) {
                     transactionDate = date
-                    print("   📅 Date: \(dateStr)")
+                    AppLog.debug("   📅 Date: \(dateStr)")
                 }
 
-                print("✅ [CreateSplitBillView] Auto-fill completed from AI data")
+                AppLog.debug("✅ [CreateSplitBillView] Auto-fill completed from AI data")
             } else if let result = scannedResult, let parsed = result.parsedAmount {
                 // Fallback to basic OCR parsing
                 amountStr = String(Int(parsed))
-                print("⚠️ [CreateSplitBillView] Using basic OCR parsing (amount only): \(parsed)")
+                AppLog.debug("⚠️ [CreateSplitBillView] Using basic OCR parsing (amount only): \(parsed)")
 
                 // Create single item for manual split
                 if totalAmount > 0 {
                     items = [ItemEntry(name: "Total Tagihan", price: totalAmount, quantity: 1)]
                 }
             } else {
-                print("ℹ️ [CreateSplitBillView] No scanned data, manual input mode")
+                AppLog.debug("ℹ️ [CreateSplitBillView] No scanned data, manual input mode")
             }
 
             // Ensure items exist for manual entry
             if items.isEmpty && totalAmount > 0 {
                 items = [ItemEntry(name: "Total Tagihan", price: totalAmount)]
-                print("   📦 Created default item for manual split")
+                AppLog.debug("   📦 Created default item for manual split")
             }
 
             if participants.isEmpty, let user = authVM.currentUser {
                 let currentUserParticipant = ParticipantEntry(id: UUID().uuidString, uid: user.uid, name: user.displayName, isSelected: true)
                 participants.append(currentUserParticipant)
                 paidByParticipant = currentUserParticipant  // Default: current user is the payer
-                print("👤 [CreateSplitBillView] Added current user as participant: \(user.displayName)")
-                print("💳 [CreateSplitBillView] Default payer: \(user.displayName)")
+                AppLog.debug("👤 [CreateSplitBillView] Added current user as participant: \(user.displayName)")
+                AppLog.debug("💳 [CreateSplitBillView] Default payer: \(user.displayName)")
             }
 
-            print("📋 [CreateSplitBillView] Form initialized\n")
+            AppLog.debug("📋 [CreateSplitBillView] Form initialized\n")
     }
 
     func handleTotalAmountChange(_ newAmount: Double) {
@@ -487,7 +487,7 @@ struct CreateSplitBillView: View {
         if !isShowing && step == 2 {
             if !checkBankAccountBeforeContinue() {
                 withAnimation { step += 1 }
-                print("✅ [CreateSplitBillView] Bank account filled - proceeding to step 3")
+                AppLog.debug("✅ [CreateSplitBillView] Bank account filled - proceeding to step 3")
             }
         }
     }
@@ -496,19 +496,19 @@ struct CreateSplitBillView: View {
     func saveBill() async {
         guard let user = authVM.currentUser else { return }
 
-        print("💾 [CreateSplitBillView] Saving split bill...")
-        print("   📝 Title: \(title)")
-        print("   💰 amountStr: '\(amountStr)'")
-        print("   💰 totalAmount: \(totalAmount)")
-        print("   💰 calculatedTotal: \(calculatedTotal)")
-        print("   📸 receiptImage (from scan): \(receiptImage != nil)")
-        print("   📸 selectedImage (manual): \(selectedImage != nil)")
+        AppLog.debug("💾 [CreateSplitBillView] Saving split bill...")
+        AppLog.debug("   📝 Title: \(title)")
+        AppLog.debug("   💰 amountStr: '\(amountStr)'")
+        AppLog.debug("   💰 totalAmount: \(totalAmount)")
+        AppLog.debug("   💰 calculatedTotal: \(calculatedTotal)")
+        AppLog.debug("   📸 receiptImage (from scan): \(receiptImage != nil)")
+        AppLog.debug("   📸 selectedImage (manual): \(selectedImage != nil)")
 
         // Upload receipt image if available (from scan or manual)
         var receiptURL: String? = nil
         let imageToUpload = receiptImage ?? selectedImage
         if let image = imageToUpload {
-            print("📸 [CreateSplitBillView] Uploading receipt image...")
+            AppLog.debug("📸 [CreateSplitBillView] Uploading receipt image...")
 
             // Show loading overlay
             await MainActor.run {
@@ -523,9 +523,9 @@ struct CreateSplitBillView: View {
                     fileName: "receipt_\(user.uid)_\(Int(Date().timeIntervalSince1970)).jpg"
                 )
                 receiptURL = response.downloadURL
-                print("✅ [CreateSplitBillView] Receipt uploaded: \(receiptURL ?? "")")
+                AppLog.debug("✅ [CreateSplitBillView] Receipt uploaded: \(receiptURL ?? "")")
             } catch {
-                print("❌ [CreateSplitBillView] Failed to upload receipt: \(error.localizedDescription)")
+                AppLog.debug("❌ [CreateSplitBillView] Failed to upload receipt: \(error.localizedDescription)")
                 // Continue saving even if image upload fails
             }
 
@@ -553,11 +553,11 @@ struct CreateSplitBillView: View {
             } else {
                 calculatedAmount = parseAmount(participantAmounts[entry.id] ?? "0")
             }
-            print("   👤 \(entry.name): \(currency) \(calculatedAmount) [mode: \(useItemBased ? "Per Item" : "Bagi Rata")]")
+            AppLog.debug("   👤 \(entry.name): \(currency) \(calculatedAmount) [mode: \(useItemBased ? "Per Item" : "Bagi Rata")]")
 
             // Skip participants with 0 amount
             guard calculatedAmount > 0 else {
-                print("   ⚠️ Skipping \(entry.name) - amount is 0")
+                AppLog.debug("   ⚠️ Skipping \(entry.name) - amount is 0")
                 return nil
             }
 
@@ -657,7 +657,7 @@ struct CreateSplitBillView: View {
             receiptURL: receiptURL
         )
 
-        print("✅ [CreateSplitBillView] Split bill saved successfully!")
+        AppLog.debug("✅ [CreateSplitBillView] Split bill saved successfully!")
 
         // Hide loading overlay and show success alert
         await MainActor.run {
@@ -696,7 +696,7 @@ struct CreateSplitBillView: View {
             if checkBankAccountBeforeContinue() {
                 // Show alert - user must fill bank account
                 showBankAccountAlert = true
-                print("⚠️ [CreateSplitBillView] Payer doesn't have bank account - showing alert")
+                AppLog.debug("⚠️ [CreateSplitBillView] Payer doesn't have bank account - showing alert")
                 return
             }
         }
@@ -717,7 +717,7 @@ struct CreateSplitBillView: View {
                 // Return true = needs to fill bank account
                 return true
             } else {
-                print("✅ [CreateSplitBillView] Payer has bank account: \(authVM.currentUser?.bankInfo?.accountNumber ?? "")")
+                AppLog.debug("✅ [CreateSplitBillView] Payer has bank account: \(authVM.currentUser?.bankInfo?.accountNumber ?? "")")
                 return false
             }
         }

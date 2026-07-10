@@ -98,18 +98,18 @@ final class FriendsViewModel: ObservableObject {
 
     // MARK: - Send friend request
     func sendRequest(from current: UserModel, to target: UserModel) async {
-        print("📤 [FriendsVM] Sending friend request from \(current.displayName) to \(target.displayName)")
+        AppLog.debug("📤 [FriendsVM] Sending friend request from \(current.displayName) to \(target.displayName)")
 
         // Check if target is admin (admin cannot be added as friend)
         if target.role == .admin {
-            print("⚠️ [FriendsVM] Cannot send friend request to admin user")
+            AppLog.debug("⚠️ [FriendsVM] Cannot send friend request to admin user")
             errorMessage = "Tidak dapat menambahkan pengguna ini sebagai teman"
             return
         }
 
         // Check if already friends
         if current.friendUIDs.contains(target.uid) {
-            print("⚠️ [FriendsVM] Already friends with \(target.displayName)")
+            AppLog.debug("⚠️ [FriendsVM] Already friends with \(target.displayName)")
             errorMessage = "Sudah berteman dengan \(target.displayName)"
             return
         }
@@ -124,7 +124,7 @@ final class FriendsViewModel: ObservableObject {
             }
 
             if !existingRequests.isEmpty {
-                print("⚠️ [FriendsVM] Request already exists for \(target.displayName)")
+                AppLog.debug("⚠️ [FriendsVM] Request already exists for \(target.displayName)")
                 errorMessage = "Permintaan sudah dikirim ke \(target.displayName)"
                 return
             }
@@ -142,7 +142,7 @@ final class FriendsViewModel: ObservableObject {
             )
 
             try await db.db.collection(Collection.friendRequests).document(docRef.documentID).setData(from: req)
-            print("✅ [FriendsVM] Friend request sent successfully to \(target.displayName)")
+            AppLog.debug("✅ [FriendsVM] Friend request sent successfully to \(target.displayName)")
 
             // Create notification for the recipient
             let notification = NotificationModel(
@@ -158,12 +158,12 @@ final class FriendsViewModel: ObservableObject {
             )
 
             try await db.db.collection(Collection.notifications).addDocument(from: notification)
-            print("✅ [FriendsVM] Notification created for \(target.displayName)")
+            AppLog.debug("✅ [FriendsVM] Notification created for \(target.displayName)")
 
             errorMessage = nil
 
         } catch {
-            print("❌ [FriendsVM] Error sending friend request: \(error.localizedDescription)")
+            AppLog.debug("❌ [FriendsVM] Error sending friend request: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }
@@ -181,40 +181,40 @@ final class FriendsViewModel: ObservableObject {
     // MARK: - Accept request
     func acceptRequest(_ request: FriendRequest, currentUID: String) async {
         guard let reqID = request.id else {
-            print("❌ [FriendsVM] Cannot accept request: request ID is nil")
+            AppLog.debug("❌ [FriendsVM] Cannot accept request: request ID is nil")
             return
         }
 
-        print("✅ [FriendsVM] Accepting friend request from \(request.fromName)")
+        AppLog.debug("✅ [FriendsVM] Accepting friend request from \(request.fromName)")
 
         do {
             // 1. Update request status to accepted
-            print("📝 [FriendsVM] Updating request status to accepted...")
+            AppLog.debug("📝 [FriendsVM] Updating request status to accepted...")
             try await db.db.collection(Collection.friendRequests)
                 .document(reqID)
                 .updateData(["status": "accepted"])
 
             // 2. Add fromUID to current user's friendUIDs
-            print("👥 [FriendsVM] Adding \(request.fromUID) to current user's friends...")
+            AppLog.debug("👥 [FriendsVM] Adding \(request.fromUID) to current user's friends...")
             try await db.db.collection(Collection.users)
                 .document(currentUID)
                 .updateData(["friendUIDs": FieldValue.arrayUnion([request.fromUID])])
 
             // 3. Add currentUID to fromUser's friendUIDs
-            print("👥 [FriendsVM] Adding \(currentUID) to \(request.fromName)'s friends...")
+            AppLog.debug("👥 [FriendsVM] Adding \(currentUID) to \(request.fromName)'s friends...")
             try await db.db.collection(Collection.users)
                 .document(request.fromUID)
                 .updateData(["friendUIDs": FieldValue.arrayUnion([currentUID])])
 
             // 4. Remove from pending requests
-            print("🗑️ [FriendsVM] Removing request from pending list...")
+            AppLog.debug("🗑️ [FriendsVM] Removing request from pending list...")
             pendingRequests.removeAll { $0.id == reqID }
 
-            print("✅ [FriendsVM] Friend request accepted successfully!")
+            AppLog.debug("✅ [FriendsVM] Friend request accepted successfully!")
             errorMessage = nil
 
         } catch {
-            print("❌ [FriendsVM] Error accepting friend request: \(error.localizedDescription)")
+            AppLog.debug("❌ [FriendsVM] Error accepting friend request: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }
@@ -222,11 +222,11 @@ final class FriendsViewModel: ObservableObject {
     // MARK: - Reject request
     func rejectRequest(_ request: FriendRequest) async {
         guard let reqID = request.id else {
-            print("❌ [FriendsVM] Cannot reject request: request ID is nil")
+            AppLog.debug("❌ [FriendsVM] Cannot reject request: request ID is nil")
             return
         }
 
-        print("🚫 [FriendsVM] Rejecting friend request from \(request.fromName)")
+        AppLog.debug("🚫 [FriendsVM] Rejecting friend request from \(request.fromName)")
 
         do {
             // Update request status to rejected
@@ -237,18 +237,18 @@ final class FriendsViewModel: ObservableObject {
             // Remove from pending requests
             pendingRequests.removeAll { $0.id == reqID }
 
-            print("✅ [FriendsVM] Friend request rejected successfully!")
+            AppLog.debug("✅ [FriendsVM] Friend request rejected successfully!")
             errorMessage = nil
 
         } catch {
-            print("❌ [FriendsVM] Error rejecting friend request: \(error.localizedDescription)")
+            AppLog.debug("❌ [FriendsVM] Error rejecting friend request: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }
 
     // MARK: - Remove friend
     func removeFriend(friendID: String, currentUID: String) async {
-        print("🗑️ [FriendsVM] Removing friend \(friendID)")
+        AppLog.debug("🗑️ [FriendsVM] Removing friend \(friendID)")
 
         do {
             // Remove friend from current user's friendUIDs
@@ -264,11 +264,11 @@ final class FriendsViewModel: ObservableObject {
             // Remove from local list
             friends.removeAll { $0.uid == friendID }
 
-            print("✅ [FriendsVM] Friend removed successfully!")
+            AppLog.debug("✅ [FriendsVM] Friend removed successfully!")
             errorMessage = nil
 
         } catch {
-            print("❌ [FriendsVM] Error removing friend: \(error.localizedDescription)")
+            AppLog.debug("❌ [FriendsVM] Error removing friend: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }
@@ -300,7 +300,7 @@ final class FriendsViewModel: ObservableObject {
     // MARK: - Accept friend request (with currentUser)
     func acceptFriendRequest(requestID: String, currentUser: UserModel) async {
         guard let request = pendingRequests.first(where: { $0.id == requestID }) else {
-            print("❌ [FriendsVM] Cannot find request with ID: \(requestID)")
+            AppLog.debug("❌ [FriendsVM] Cannot find request with ID: \(requestID)")
             return
         }
 
@@ -323,16 +323,16 @@ final class FriendsViewModel: ObservableObject {
                 )
 
                 try await db.db.collection(Collection.notifications).addDocument(from: notification)
-                print("✅ [FriendsVM] Notification sent to \(request.fromName)")
+                AppLog.debug("✅ [FriendsVM] Notification sent to \(request.fromName)")
             } catch {
-                print("⚠️ [FriendsVM] Failed to send notification: \(error.localizedDescription)")
+                AppLog.debug("⚠️ [FriendsVM] Failed to send notification: \(error.localizedDescription)")
                 // Don't set errorMessage since the main action succeeded
             }
         }
 
         // Reload friends list to show the newly added friend
         if errorMessage == nil {
-            print("🔄 [FriendsVM] Reloading friends list after accepting request...")
+            AppLog.debug("🔄 [FriendsVM] Reloading friends list after accepting request...")
 
             // Fetch updated current user to get updated friendUIDs
             do {
@@ -344,7 +344,7 @@ final class FriendsViewModel: ObservableObject {
                     await loadFriends(currentUser: updatedUser)
                 }
             } catch {
-                print("❌ [FriendsVM] Error reloading friends: \(error.localizedDescription)")
+                AppLog.debug("❌ [FriendsVM] Error reloading friends: \(error.localizedDescription)")
             }
         }
     }
@@ -357,7 +357,7 @@ final class FriendsViewModel: ObservableObject {
 
     // MARK: - Accept friend request by ID (from notification)
     func acceptFriendRequestByID(requestID: String, currentUser: UserModel, notificationID: String?) async {
-        print("✅ [FriendsVM] Accepting friend request by ID: \(requestID)")
+        AppLog.debug("✅ [FriendsVM] Accepting friend request by ID: \(requestID)")
 
         do {
             // 1. Fetch the friend request document
@@ -366,35 +366,35 @@ final class FriendsViewModel: ObservableObject {
                 .getDocument()
 
             guard docSnapshot.exists else {
-                print("❌ [FriendsVM] Request document does not exist: \(requestID)")
+                AppLog.debug("❌ [FriendsVM] Request document does not exist: \(requestID)")
                 errorMessage = "Permintaan tidak ditemukan"
                 return
             }
 
             let request = try docSnapshot.data(as: FriendRequest.self)
-            print("📋 [FriendsVM] Found request from \(request.fromName) to \(request.toUID)")
+            AppLog.debug("📋 [FriendsVM] Found request from \(request.fromName) to \(request.toUID)")
 
             // 2. Update request status to accepted
-            print("📝 [FriendsVM] Updating request status to accepted...")
+            AppLog.debug("📝 [FriendsVM] Updating request status to accepted...")
             try await db.db.collection(Collection.friendRequests)
                 .document(requestID)
                 .updateData(["status": "accepted"])
 
             // 3. Add fromUID to current user's friendUIDs
-            print("👥 [FriendsVM] Adding \(request.fromUID) to current user's friends...")
+            AppLog.debug("👥 [FriendsVM] Adding \(request.fromUID) to current user's friends...")
             try await db.db.collection(Collection.users)
                 .document(currentUser.uid)
                 .updateData(["friendUIDs": FieldValue.arrayUnion([request.fromUID])])
 
             // 4. Add currentUID to fromUser's friendUIDs
-            print("👥 [FriendsVM] Adding \(currentUser.uid) to \(request.fromName)'s friends...")
+            AppLog.debug("👥 [FriendsVM] Adding \(currentUser.uid) to \(request.fromName)'s friends...")
             try await db.db.collection(Collection.users)
                 .document(request.fromUID)
                 .updateData(["friendUIDs": FieldValue.arrayUnion([currentUser.uid])])
 
             // 5. Delete the notification
             if let notifID = notificationID {
-                print("🗑️ [FriendsVM] Deleting notification \(notifID)...")
+                AppLog.debug("🗑️ [FriendsVM] Deleting notification \(notifID)...")
                 try await db.db.collection(Collection.notifications)
                     .document(notifID)
                     .delete()
@@ -414,18 +414,18 @@ final class FriendsViewModel: ObservableObject {
             )
             try await db.db.collection(Collection.notifications).addDocument(from: notification)
 
-            print("✅ [FriendsVM] Friend request accepted successfully!")
+            AppLog.debug("✅ [FriendsVM] Friend request accepted successfully!")
             errorMessage = nil
 
         } catch {
-            print("❌ [FriendsVM] Error accepting friend request: \(error.localizedDescription)")
+            AppLog.debug("❌ [FriendsVM] Error accepting friend request: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }
 
     // MARK: - Decline friend request by ID (from notification)
     func declineFriendRequestByID(requestID: String, notificationID: String?) async {
-        print("🚫 [FriendsVM] Declining friend request by ID: \(requestID)")
+        AppLog.debug("🚫 [FriendsVM] Declining friend request by ID: \(requestID)")
 
         do {
             // 1. Update request status to rejected
@@ -435,17 +435,17 @@ final class FriendsViewModel: ObservableObject {
 
             // 2. Delete the notification
             if let notifID = notificationID {
-                print("🗑️ [FriendsVM] Deleting notification \(notifID)...")
+                AppLog.debug("🗑️ [FriendsVM] Deleting notification \(notifID)...")
                 try await db.db.collection(Collection.notifications)
                     .document(notifID)
                     .delete()
             }
 
-            print("✅ [FriendsVM] Friend request declined successfully!")
+            AppLog.debug("✅ [FriendsVM] Friend request declined successfully!")
             errorMessage = nil
 
         } catch {
-            print("❌ [FriendsVM] Error declining friend request: \(error.localizedDescription)")
+            AppLog.debug("❌ [FriendsVM] Error declining friend request: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }

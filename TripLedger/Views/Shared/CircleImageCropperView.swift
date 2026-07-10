@@ -21,9 +21,9 @@ struct CircleImageCropperView: View {
             // Debug: Print image info
             Color.clear
                 .onAppear {
-                    print("🖼️ [ImageCropper] View appeared")
-                    print("   Image size: \(image.size)")
-                    print("   Crop diameter: \(cropDiameter)")
+                    AppLog.debug("🖼️ [ImageCropper] View appeared")
+                    AppLog.debug("   Image size: \(image.size)")
+                    AppLog.debug("   Crop diameter: \(cropDiameter)")
                 }
 
             VStack(spacing: 0) {
@@ -196,15 +196,15 @@ struct CircleImageCropperView: View {
 
     // SIMPLIFIED: Direct crop from original image with proper calculation
     private func cropImageUsingRender() -> UIImage {
-        print("🎨 [ImageCropper] Starting crop")
-        print("   Original image size: \(image.size)")
-        print("   Scale: \(scale), Offset: \(offset)")
+        AppLog.debug("🎨 [ImageCropper] Starting crop")
+        AppLog.debug("   Original image size: \(image.size)")
+        AppLog.debug("   Scale: \(scale), Offset: \(offset)")
 
         // Normalize image to fix orientation issues
         let normalizedImage = image.fixedOrientation()
         let imageSize = normalizedImage.size
 
-        print("   Normalized image size: \(imageSize)")
+        AppLog.debug("   Normalized image size: \(imageSize)")
 
         // Screen dimensions
         let screenSize = UIScreen.main.bounds.size
@@ -229,8 +229,8 @@ struct CircleImageCropperView: View {
         displayWidth *= scale
         displayHeight *= scale
 
-        print("   Display size (before scale): \(screenSize.width) x \(screenSize.height)")
-        print("   Display size (after scale): \(displayWidth) x \(displayHeight)")
+        AppLog.debug("   Display size (before scale): \(screenSize.width) x \(screenSize.height)")
+        AppLog.debug("   Display size (after scale): \(displayWidth) x \(displayHeight)")
 
         // Image position on screen (centered + offset)
         let imageX = (screenSize.width - displayWidth) / 2 + offset.width
@@ -244,8 +244,8 @@ struct CircleImageCropperView: View {
         let cropX = circleX - cropDiameter / 2 - imageX
         let cropY = circleY - cropDiameter / 2 - imageY
 
-        print("   Image position: (\(imageX), \(imageY))")
-        print("   Crop region (display coords): (\(cropX), \(cropY))")
+        AppLog.debug("   Image position: (\(imageX), \(imageY))")
+        AppLog.debug("   Crop region (display coords): (\(cropX), \(cropY))")
 
         // Convert to original image coordinates
         let scaleToOriginal = imageSize.width / displayWidth
@@ -256,7 +256,7 @@ struct CircleImageCropperView: View {
             height: cropDiameter * scaleToOriginal
         )
 
-        print("   Crop rect (original coords): \(cropRect)")
+        AppLog.debug("   Crop rect (original coords): \(cropRect)")
 
         // Clamp to image bounds
         cropRect.origin.x = max(0, min(cropRect.origin.x, imageSize.width - cropRect.width))
@@ -264,11 +264,11 @@ struct CircleImageCropperView: View {
         cropRect.size.width = min(cropRect.width, imageSize.width - cropRect.origin.x)
         cropRect.size.height = min(cropRect.height, imageSize.height - cropRect.origin.y)
 
-        print("   Clamped crop rect: \(cropRect)")
+        AppLog.debug("   Clamped crop rect: \(cropRect)")
 
         // Crop using CGImage
         guard let cgImage = normalizedImage.cgImage else {
-            print("❌ [ImageCropper] No CGImage available")
+            AppLog.debug("❌ [ImageCropper] No CGImage available")
             return normalizedImage
         }
 
@@ -282,7 +282,7 @@ struct CircleImageCropperView: View {
         )
 
         guard let croppedCGImage = cgImage.cropping(to: cropRectScaled) else {
-            print("❌ [ImageCropper] CGImage crop failed")
+            AppLog.debug("❌ [ImageCropper] CGImage crop failed")
             return normalizedImage
         }
 
@@ -301,7 +301,7 @@ struct CircleImageCropperView: View {
             croppedImage.draw(in: CGRect(origin: .zero, size: outputSize))
         }
 
-        print("✅ [ImageCropper] Crop complete")
+        AppLog.debug("✅ [ImageCropper] Crop complete")
         return finalImage
     }
 

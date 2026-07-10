@@ -464,7 +464,7 @@ struct AturPembagianView: View {
             (id: "3", name: "Citra")
         ],
         onSave: { splits in
-            print("Splits: \(splits)")
+            AppLog.debug("Splits: \(splits)")
         }
     )
 }

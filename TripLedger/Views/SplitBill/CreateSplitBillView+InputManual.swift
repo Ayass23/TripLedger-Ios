@@ -82,12 +82,12 @@ extension CreateSplitBillView {
                                             item.selectedParticipantIDs.remove(participant.id)
                                             // Also remove from custom splits
                                             item.customSplits.removeValue(forKey: participant.id)
-                                            print("🔴 [Step3] Removed \(participant.name) from \(item.name)")
+                                            AppLog.debug("🔴 [Step3] Removed \(participant.name) from \(item.name)")
                                         } else {
                                             item.selectedParticipantIDs.insert(participant.id)
-                                            print("✅ [Step3] Added \(participant.name) to \(item.name)")
+                                            AppLog.debug("✅ [Step3] Added \(participant.name) to \(item.name)")
                                         }
-                                        print("   Current selections for \(item.name): \(item.selectedParticipantIDs.count) people")
+                                        AppLog.debug("   Current selections for \(item.name): \(item.selectedParticipantIDs.count) people")
                                     }
                                 } label: {
                                     HStack(spacing: 6) {

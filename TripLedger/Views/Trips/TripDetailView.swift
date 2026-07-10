@@ -472,7 +472,7 @@ struct TripDetailView: View {
         do {
             suspendedMemberUIDs = try await FirestoreService.shared.fetchSuspendedMemberUIDs(memberUIDs: memberUIDs)
         } catch {
-            print("Error loading suspended members: \(error)")
+            AppLog.debug("Error loading suspended members: \(error)")
         }
     }
 
@@ -484,7 +484,7 @@ struct TripDetailView: View {
             .document(tripID)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("Error listening to trip updates: \(error)")
+                    AppLog.debug("Error listening to trip updates: \(error)")
                     return
                 }
 

@@ -212,11 +212,11 @@ struct AppealFormView: View {
 
             try await db.collection(Collection.appeals).addDocument(from: appeal)
 
-            print("✅ [AppealForm] Appeal submitted successfully")
+            AppLog.debug("✅ [AppealForm] Appeal submitted successfully")
             showSuccessAlert = true
 
         } catch {
-            print("❌ [AppealForm] Error submitting appeal: \(error)")
+            AppLog.debug("❌ [AppealForm] Error submitting appeal: \(error)")
             errorMessage = "Gagal mengirim banding. Silakan coba lagi."
         }
     }

@@ -113,14 +113,14 @@ final class AuthViewModel: ObservableObject {
 
             // Check if user is suspended
             if user.isSuspended {
-                print("⚠️ [AuthVM] User is suspended during login")
+                AppLog.debug("⚠️ [AuthVM] User is suspended during login")
 
                 // Set suspend info FIRST before logout
                 suspendReason = user.suspendReason ?? "Akun Anda telah disuspend oleh admin."
                 suspendedUserInfo = (uid: user.uid, name: user.displayName, email: user.email)
                 showSuspendedAlert = true
 
-                print("📝 [AuthVM] Suspend reason set: \(suspendReason ?? "nil")")
+                AppLog.debug("📝 [AuthVM] Suspend reason set: \(suspendReason ?? "nil")")
 
                 // Logout after setting suspend info
                 try? authService.signOut()

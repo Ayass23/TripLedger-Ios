@@ -34,17 +34,17 @@ final class SplitBillViewModel: ObservableObject {
     // MARK: - Listen to user's split bills (real-time)
     // Listens to bills where user is owner OR participant
     func listenSplitBills(uid: String) {
-        print("🔊 [SplitBillVM] Starting listeners for user (uid: \(uid))")
-        print("   🔑 User UID for participant query: '\(uid)'")
+        AppLog.debug("🔊 [SplitBillVM] Starting listeners for user (uid: \(uid))")
+        AppLog.debug("   🔑 User UID for participant query: '\(uid)'")
 
         // Listener 1: Bills where user is owner (for backward compatibility)
         ownerListener = db.listen(collection: Collection.splitBills, queryBuilder: { ref in
             ref.whereField("ownerUID", isEqualTo: uid)
                .order(by: "createdAt", descending: true)
         }) { [weak self] (bills: [SplitBillModel]) in
-            print("📥 [SplitBillVM] Owner listener received \(bills.count) bills")
+            AppLog.debug("📥 [SplitBillVM] Owner listener received \(bills.count) bills")
             for bill in bills {
-                print("   📄 Bill '\(bill.title)': participantUIDs = \(bill.participantUIDs)")
+                AppLog.debug("   📄 Bill '\(bill.title)': participantUIDs = \(bill.participantUIDs)")
             }
 
             // Auto-migrate old bills: update participantUIDs if missing
@@ -59,18 +59,18 @@ final class SplitBillViewModel: ObservableObject {
         // Listener 2: Bills where user is participant (but not owner to avoid duplicates)
         // Note: We don't use orderBy here to avoid needing a composite index
         // Sorting is done in combineAndPublishBills() instead
-        print("🔍 [SplitBillVM] Setting up participant listener with arrayContains: '\(uid)'")
+        AppLog.debug("🔍 [SplitBillVM] Setting up participant listener with arrayContains: '\(uid)'")
         participantListener = db.listen(collection: Collection.splitBills, queryBuilder: { ref in
             ref.whereField("participantUIDs", arrayContains: uid)
         }) { [weak self] (bills: [SplitBillModel]) in
-            print("📥 [SplitBillVM] Participant listener received \(bills.count) bills (before filtering)")
+            AppLog.debug("📥 [SplitBillVM] Participant listener received \(bills.count) bills (before filtering)")
             for bill in bills {
-                print("   📄 Bill '\(bill.title)': ownerUID=\(bill.ownerUID), participantUIDs=\(bill.participantUIDs)")
+                AppLog.debug("   📄 Bill '\(bill.title)': ownerUID=\(bill.ownerUID), participantUIDs=\(bill.participantUIDs)")
             }
 
             // Filter out bills where user is owner (already handled by ownerListener)
             let nonOwnerBills = bills.filter { $0.ownerUID != uid }
-            print("📥 [SplitBillVM] After filtering (excluding owner): \(nonOwnerBills.count) bills")
+            AppLog.debug("📥 [SplitBillVM] After filtering (excluding owner): \(nonOwnerBills.count) bills")
 
             self?.participantBills = nonOwnerBills
             self?.combineAndPublishBills()
@@ -90,7 +90,7 @@ final class SplitBillViewModel: ObservableObject {
         // Sort by createdAt descending
         allBills.sort { ($0.createdAt.dateValue() ?? Date.distantPast) > ($1.createdAt.dateValue() ?? Date.distantPast) }
 
-        print("📊 [SplitBillVM] Combined bills: \(allBills.count) (owner: \(ownerBills.count), participant: \(participantBills.count))")
+        AppLog.debug("📊 [SplitBillVM] Combined bills: \(allBills.count) (owner: \(ownerBills.count), participant: \(participantBills.count))")
 
         self.splitBills = allBills
     }
@@ -103,7 +103,7 @@ final class SplitBillViewModel: ObservableObject {
 
             // If participantUIDs is empty or only has owner, migrate it
             if bill.participantUIDs.isEmpty || (bill.participantUIDs.count == 1 && bill.participantUIDs.contains(bill.ownerUID)) {
-                print("🔄 [SplitBillVM] Migrating old bill: \(bill.title)")
+                AppLog.debug("🔄 [SplitBillVM] Migrating old bill: \(bill.title)")
 
                 var updatedBill = bill
                 var uids = bill.participants.compactMap { $0.uid }
@@ -114,9 +114,9 @@ final class SplitBillViewModel: ObservableObject {
 
                 do {
                     try db.db.collection(Collection.splitBills).document(billID).setData(from: updatedBill)
-                    print("✅ [SplitBillVM] Migrated: \(bill.title) - added \(uids.count) UIDs")
+                    AppLog.debug("✅ [SplitBillVM] Migrated: \(bill.title) - added \(uids.count) UIDs")
                 } catch {
-                    print("❌ [SplitBillVM] Migration failed for \(bill.title): \(error)")
+                    AppLog.debug("❌ [SplitBillVM] Migration failed for \(bill.title): \(error)")
                 }
             }
         }
@@ -150,14 +150,14 @@ final class SplitBillViewModel: ObservableObject {
         }
 
         // Debug logging
-        print("🔍 [SplitBillVM] Creating split bill with participantUIDs:")
-        print("   📝 Title: \(title)")
-        print("   👤 Owner UID: \(ownerUID)")
-        print("   👥 All participants:")
+        AppLog.debug("🔍 [SplitBillVM] Creating split bill with participantUIDs:")
+        AppLog.debug("   📝 Title: \(title)")
+        AppLog.debug("   👤 Owner UID: \(ownerUID)")
+        AppLog.debug("   👥 All participants:")
         for participant in participants {
-            print("      - \(participant.displayName): uid=\(participant.uid ?? "nil")")
+            AppLog.debug("      - \(participant.displayName): uid=\(participant.uid ?? "nil")")
         }
-        print("   📋 Final participantUIDs array: \(participantUIDs)")
+        AppLog.debug("   📋 Final participantUIDs array: \(participantUIDs)")
 
         let bill = SplitBillModel(
             ownerUID: ownerUID, ownerName: ownerName,
@@ -172,14 +172,14 @@ final class SplitBillViewModel: ObservableObject {
         )
         do {
             try db.db.collection(Collection.splitBills).document(docRef.documentID).setData(from: bill)
-            print("✅ [SplitBillVM] Split bill saved successfully!")
-            print("   📄 Document ID: \(docRef.documentID)")
-            print("   📋 Saved participantUIDs: \(participantUIDs)")
+            AppLog.debug("✅ [SplitBillVM] Split bill saved successfully!")
+            AppLog.debug("   📄 Document ID: \(docRef.documentID)")
+            AppLog.debug("   📋 Saved participantUIDs: \(participantUIDs)")
             var created = bill
             created.id = docRef.documentID
             return created
         } catch {
-            print("❌ [SplitBillVM] Failed to save split bill: \(error.localizedDescription)")
+            AppLog.debug("❌ [SplitBillVM] Failed to save split bill: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             return nil
         }
@@ -187,59 +187,59 @@ final class SplitBillViewModel: ObservableObject {
 
     // MARK: - Toggle participant paid status
     func toggleParticipantPaidStatus(billID: String, participantID: String, isPaid: Bool) async {
-        print("▶️ [SplitBillVM] toggleParticipantPaidStatus dipanggil untuk billID: \(billID), participantID: \(participantID), isPaid: \(isPaid)")
+        AppLog.debug("▶️ [SplitBillVM] toggleParticipantPaidStatus dipanggil untuk billID: \(billID), participantID: \(participantID), isPaid: \(isPaid)")
         
         guard let idx = splitBills.firstIndex(where: { $0.id == billID }),
               let pIdx = splitBills[idx].participants.firstIndex(where: { $0.id == participantID })
         else {
-            print("❌ [SplitBillVM] Gagal: Tagihan atau partisipan tidak ditemukan di memori lokal.")
+            AppLog.debug("❌ [SplitBillVM] Gagal: Tagihan atau partisipan tidak ditemukan di memori lokal.")
             return
         }
 
         var updatedBill = splitBills[idx]
         updatedBill.participants[pIdx].isPaid = isPaid
-        print("⏳ [SplitBillVM] Menyiapkan data update... Partisipan \(updatedBill.participants[pIdx].displayName) diset menjadi isPaid = \(isPaid).")
+        AppLog.debug("⏳ [SplitBillVM] Menyiapkan data update... Partisipan \(updatedBill.participants[pIdx].displayName) diset menjadi isPaid = \(isPaid).")
         
         // Check if all paid → mark as settled, otherwise active
         if updatedBill.participants.allSatisfy({ $0.isPaid }) {
             updatedBill.status = .settled
-            print("🎉 [SplitBillVM] Semua partisipan sudah lunas! Status tagihan diset menjadi .settled")
+            AppLog.debug("🎉 [SplitBillVM] Semua partisipan sudah lunas! Status tagihan diset menjadi .settled")
         } else {
             updatedBill.status = .active
-            print("🔄 [SplitBillVM] Status tagihan diset kembali menjadi .active")
+            AppLog.debug("🔄 [SplitBillVM] Status tagihan diset kembali menjadi .active")
         }
         
         do {
             // Write entire updated object to Firestore
-            print("📡 [SplitBillVM] Mengirim update ke Firestore (Collection: \(Collection.splitBills))...")
+            AppLog.debug("📡 [SplitBillVM] Mengirim update ke Firestore (Collection: \(Collection.splitBills))...")
             try db.db.collection(Collection.splitBills).document(billID).setData(from: updatedBill)
             
-            print("✅ [SplitBillVM] BERHASIL! Data berhasil disimpan di Firestore.")
+            AppLog.debug("✅ [SplitBillVM] BERHASIL! Data berhasil disimpan di Firestore.")
             
             // Update local state immediately to ensure UI responsiveness
             splitBills[idx] = updatedBill
-            print("🔄 [SplitBillVM] State lokal berhasil diperbarui.")
+            AppLog.debug("🔄 [SplitBillVM] State lokal berhasil diperbarui.")
         } catch {
             errorMessage = error.localizedDescription
-            print("🚨 [SplitBillVM] ERROR GAGAL UPDATE: \(error.localizedDescription)")
-            print("🚨 [SplitBillVM] Detail Error: \(error)")
+            AppLog.debug("🚨 [SplitBillVM] ERROR GAGAL UPDATE: \(error.localizedDescription)")
+            AppLog.debug("🚨 [SplitBillVM] Detail Error: \(error)")
         }
     }
 
     // MARK: - Delete split bill
     func deleteSplitBill(billID: String) async {
-        print("🗑️ [SplitBillVM] Deleting split bill: \(billID)")
+        AppLog.debug("🗑️ [SplitBillVM] Deleting split bill: \(billID)")
 
         // First, check if bill has receipt photo and delete it from storage
         if let bill = splitBills.first(where: { $0.id == billID }),
            let receiptURL = bill.receiptURL,
            !receiptURL.isEmpty {
-            print("📸 [SplitBillVM] Deleting receipt photo from storage...")
+            AppLog.debug("📸 [SplitBillVM] Deleting receipt photo from storage...")
             do {
                 try await FirebaseStorageService.shared.deleteImageByURL(receiptURL)
-                print("✅ [SplitBillVM] Receipt photo deleted from storage")
+                AppLog.debug("✅ [SplitBillVM] Receipt photo deleted from storage")
             } catch {
-                print("⚠️ [SplitBillVM] Failed to delete receipt photo (continuing...): \(error.localizedDescription)")
+                AppLog.debug("⚠️ [SplitBillVM] Failed to delete receipt photo (continuing...): \(error.localizedDescription)")
                 // Continue with bill deletion even if photo deletion fails
             }
         }
@@ -247,11 +247,11 @@ final class SplitBillViewModel: ObservableObject {
         // Delete the bill document from Firestore
         do {
             try await db.delete(collection: Collection.splitBills, documentID: billID)
-            print("✅ [SplitBillVM] Split bill deleted successfully from Firestore")
-            print("   Listener should automatically update splitBills array")
+            AppLog.debug("✅ [SplitBillVM] Split bill deleted successfully from Firestore")
+            AppLog.debug("   Listener should automatically update splitBills array")
         } catch {
             errorMessage = error.localizedDescription
-            print("❌ [SplitBillVM] Failed to delete: \(error.localizedDescription)")
+            AppLog.debug("❌ [SplitBillVM] Failed to delete: \(error.localizedDescription)")
         }
     }
 }

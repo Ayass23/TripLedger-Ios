@@ -39,7 +39,7 @@ final class FirebaseStorageService {
             throw StorageError.compressionFailed
         }
 
-        print("📊 [Storage] Image size after resize+compress: \(Double(imageData.count) / 1024 / 1024) MB")
+        AppLog.debug("📊 [Storage] Image size after resize+compress: \(Double(imageData.count) / 1024 / 1024) MB")
 
         // Validate size (max 5MB)
         let maxSizeInBytes = 5 * 1024 * 1024 // 5MB
@@ -60,7 +60,7 @@ final class FirebaseStorageService {
         // Create reference
         let fileRef = storageRef.child("\(folder)/\(finalFileName)")
 
-        print("📤 [Storage] Uploading to: \(fileRef.fullPath)")
+        AppLog.debug("📤 [Storage] Uploading to: \(fileRef.fullPath)")
 
         // Set metadata
         let metadata = StorageMetadata()
@@ -77,7 +77,7 @@ final class FirebaseStorageService {
             // Get download URL
             let downloadURL = try await fileRef.downloadURL()
 
-            print("✅ [Storage] Upload success: \(downloadURL.absoluteString)")
+            AppLog.debug("✅ [Storage] Upload success: \(downloadURL.absoluteString)")
 
             return StorageUploadResponse(
                 downloadURL: downloadURL.absoluteString,
@@ -86,7 +86,7 @@ final class FirebaseStorageService {
             )
 
         } catch {
-            print("❌ [Storage] Upload error: \(error.localizedDescription)")
+            AppLog.debug("❌ [Storage] Upload error: \(error.localizedDescription)")
             throw StorageError.uploadFailed(message: error.localizedDescription)
         }
     }
@@ -97,24 +97,24 @@ final class FirebaseStorageService {
     func deleteImage(fullPath: String) async throws {
 
         guard !fullPath.isEmpty else {
-            print("⚠️ [Storage] Empty path, skipping delete")
+            AppLog.debug("⚠️ [Storage] Empty path, skipping delete")
             return
         }
 
         let fileRef = storageRef.child(fullPath)
 
-        print("🗑️  [Storage] Deleting: \(fullPath)")
+        AppLog.debug("🗑️  [Storage] Deleting: \(fullPath)")
 
         do {
             try await fileRef.delete()
-            print("✅ [Storage] Delete success: \(fullPath)")
+            AppLog.debug("✅ [Storage] Delete success: \(fullPath)")
         } catch let error as NSError {
             // If file doesn't exist (404), consider it success
             if error.domain == StorageErrorDomain && error.code == StorageErrorCode.objectNotFound.rawValue {
-                print("⚠️ [Storage] File not found (already deleted): \(fullPath)")
+                AppLog.debug("⚠️ [Storage] File not found (already deleted): \(fullPath)")
                 return
             }
-            print("❌ [Storage] Delete error: \(error.localizedDescription)")
+            AppLog.debug("❌ [Storage] Delete error: \(error.localizedDescription)")
             throw StorageError.deleteFailed(message: error.localizedDescription)
         }
     }
@@ -145,7 +145,7 @@ final class FirebaseStorageService {
             let result = try await folderRef.listAll()
             return result.items.map { $0.fullPath }
         } catch {
-            print("❌ [Storage] List error: \(error.localizedDescription)")
+            AppLog.debug("❌ [Storage] List error: \(error.localizedDescription)")
             throw StorageError.listFailed(message: error.localizedDescription)
         }
     }
@@ -168,11 +168,11 @@ final class FirebaseStorageService {
 
         // If no resize needed, return original
         if newSize == originalSize {
-            print("📏 [Storage] No resize needed: \(originalSize.width)x\(originalSize.height)")
+            AppLog.debug("📏 [Storage] No resize needed: \(originalSize.width)x\(originalSize.height)")
             return image
         }
 
-        print("📏 [Storage] Resizing from \(originalSize.width)x\(originalSize.height) to \(newSize.width)x\(newSize.height)")
+        AppLog.debug("📏 [Storage] Resizing from \(originalSize.width)x\(originalSize.height) to \(newSize.width)x\(newSize.height)")
 
         // Resize image
         let renderer = UIGraphicsImageRenderer(size: newSize)

@@ -146,7 +146,7 @@ final class SettlementViewModel: ObservableObject {
             }
             myPendingSettlements = settlements
         } catch {
-            print("Error fetching my pending settlements: \(error)")
+            AppLog.debug("Error fetching my pending settlements: \(error)")
         }
     }
 
@@ -334,7 +334,7 @@ final class SettlementViewModel: ObservableObject {
         do {
             try await notifRef.setData(notification)
         } catch {
-            print("Failed to send notification: \(error)")
+            AppLog.debug("Failed to send notification: \(error)")
         }
     }
 

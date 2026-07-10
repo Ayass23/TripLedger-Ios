@@ -59,9 +59,9 @@ final class NotificationsViewModel: ObservableObject {
             notifications.removeAll { $0.id == notificationID }
             unreadCount = notifications.filter { !$0.isRead }.count
 
-            print("✅ [NotifVM] Notification deleted: \(notificationID)")
+            AppLog.debug("✅ [NotifVM] Notification deleted: \(notificationID)")
         } catch {
-            print("❌ [NotifVM] Error deleting notification: \(error.localizedDescription)")
+            AppLog.debug("❌ [NotifVM] Error deleting notification: \(error.localizedDescription)")
         }
     }
 }

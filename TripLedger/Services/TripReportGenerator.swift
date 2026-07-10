@@ -173,7 +173,7 @@ class TripReportGenerator {
             try data.write(to: tempURL)
             return tempURL
         } catch {
-            print("❌ Error saving Trip Summary PDF: \(error)")
+            AppLog.debug("❌ Error saving Trip Summary PDF: \(error)")
             return nil
         }
     }
@@ -286,7 +286,7 @@ class TripReportGenerator {
             try data.write(to: tempURL)
             return tempURL
         } catch {
-            print("❌ Error saving Personal Expense PDF: \(error)")
+            AppLog.debug("❌ Error saving Personal Expense PDF: \(error)")
             return nil
         }
     }

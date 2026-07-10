@@ -98,7 +98,7 @@ class PDFGenerator {
             try data.write(to: tempURL)
             return tempURL
         } catch {
-            print("❌ Error saving PDF: \(error)")
+            AppLog.debug("❌ Error saving PDF: \(error)")
             return nil
         }
     }
@@ -183,7 +183,7 @@ class PDFGenerator {
             try data.write(to: tempURL)
             return tempURL
         } catch {
-            print("❌ Error saving PDF: \(error)")
+            AppLog.debug("❌ Error saving PDF: \(error)")
             return nil
         }
     }

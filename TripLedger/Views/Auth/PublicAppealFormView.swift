@@ -256,10 +256,10 @@ struct PublicAppealFormView: View {
             if Auth.auth().currentUser == nil {
                 try await Auth.auth().signInAnonymously()
                 signedInAnonymously = true
-                print("✅ [PublicAppeal] Signed in anonymously for Firestore access")
+                AppLog.debug("✅ [PublicAppeal] Signed in anonymously for Firestore access")
             }
         } catch {
-            print("❌ [PublicAppeal] Anonymous sign-in failed: \(error)")
+            AppLog.debug("❌ [PublicAppeal] Anonymous sign-in failed: \(error)")
             alertTitle = "Gagal Mengirim"
             alertMessage = "Tidak dapat terhubung ke server. Periksa koneksi internet dan coba lagi."
             showAlert = true
@@ -270,7 +270,7 @@ struct PublicAppealFormView: View {
         defer {
             if signedInAnonymously {
                 try? Auth.auth().signOut()
-                print("✅ [PublicAppeal] Signed out anonymous user")
+                AppLog.debug("✅ [PublicAppeal] Signed out anonymous user")
             }
         }
 
@@ -326,14 +326,14 @@ struct PublicAppealFormView: View {
 
             try await db.collection(Collection.appeals).addDocument(from: appeal)
 
-            print("✅ [PublicAppeal] Appeal submitted successfully")
+            AppLog.debug("✅ [PublicAppeal] Appeal submitted successfully")
 
             alertTitle = "Berhasil Terkirim"
             alertMessage = "Pengajuan pemulihan akun telah dikirim ke admin. Silakan tunggu hasil review dari admin. Kamu akan mendapat pemberitahuan melalui email."
             showAlert = true
 
         } catch {
-            print("❌ [PublicAppeal] Error submitting appeal: \(error)")
+            AppLog.debug("❌ [PublicAppeal] Error submitting appeal: \(error)")
             let errorDesc = error.localizedDescription.lowercased()
 
             // Handle permission errors - likely means email not found or rules issue

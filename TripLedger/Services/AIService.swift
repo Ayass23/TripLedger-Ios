@@ -13,7 +13,7 @@ final class AIService {
         guard let key = Bundle.main.infoDictionary?["OPENAI_API_KEY"] as? String,
               key != "YOUR_OPENAI_API_KEY_HERE",
               !key.isEmpty else {
-            print("⚠️ [AIService] OpenAI API key not configured in Secrets.xcconfig")
+            AppLog.debug("⚠️ [AIService] OpenAI API key not configured in Secrets.xcconfig")
             return ""
         }
         return key
@@ -27,11 +27,11 @@ final class AIService {
     /// and name↔price pairing (immune to OCR row-reconstruction errors), while
     /// the OCR text helps with exact digits.
     func parseReceipt(from ocrText: String, image: UIImage? = nil) async throws -> ParsedReceiptModel {
-        print("📄 [AIService] Starting receipt parsing...")
-        print("📝 [AIService] OCR Text (\(ocrText.count) chars):")
-        print("─────────────────────────────────────")
-        print(ocrText)
-        print("─────────────────────────────────────")
+        AppLog.debug("📄 [AIService] Starting receipt parsing...")
+        AppLog.debug("📝 [AIService] OCR Text (\(ocrText.count) chars):")
+        AppLog.debug("─────────────────────────────────────")
+        AppLog.debug(ocrText)
+        AppLog.debug("─────────────────────────────────────")
 
         // Buat prompt untuk AI (spesifik untuk struk Indonesia) - IMPROVED VERSION v2
         var prompt = """
@@ -290,12 +290,12 @@ final class AIService {
 
         // Check if API key is configured
         guard !apiKey.isEmpty else {
-            print("⚠️ [AIService] API key not configured, using mock parser")
+            AppLog.debug("⚠️ [AIService] API key not configured, using mock parser")
             return createMockParsedReceipt(from: ocrText)
         }
 
         // Prepare request
-        print("🤖 [AIService] Calling OpenAI API...")
+        AppLog.debug("🤖 [AIService] Calling OpenAI API...")
         let systemPrompt = """
             Kamu adalah parser struk Indonesia yang sangat akurat.
 
@@ -324,7 +324,7 @@ final class AIService {
         // User message: multimodal (text + photo) when the photo is available
         let userMessageContent: Any
         if let imageBase64 = imageBase64 {
-            print("🖼️ [AIService] Attaching receipt photo to AI request")
+            AppLog.debug("🖼️ [AIService] Attaching receipt photo to AI request")
             userMessageContent = [
                 ["type": "text", "text": prompt],
                 ["type": "image_url", "image_url": [
@@ -361,16 +361,16 @@ final class AIService {
             // otherwise fail decoding with a generic, misleading error
             if choice?.finishReason == "length" {
                 if maxCompletionTokens < 16000 {
-                    print("⚠️ [AIService] Response truncated (finish_reason=length), retrying with 16000 tokens...")
+                    AppLog.debug("⚠️ [AIService] Response truncated (finish_reason=length), retrying with 16000 tokens...")
                     maxCompletionTokens = 16000
                     continue
                 }
-                print("❌ [AIService] Response truncated even at \(maxCompletionTokens) tokens")
+                AppLog.debug("❌ [AIService] Response truncated even at \(maxCompletionTokens) tokens")
                 throw AppError.unknown("Respons AI terpotong karena struk terlalu panjang. Coba scan ulang dengan foto yang lebih jelas.")
             }
 
             guard let responseContent = choice?.message.content, !responseContent.isEmpty else {
-                print("❌ [AIService] No content in AI response")
+                AppLog.debug("❌ [AIService] No content in AI response")
                 throw AppError.unknown("No content in AI response")
             }
 
@@ -378,10 +378,10 @@ final class AIService {
             break
         }
 
-        print("🤖 [AIService] Raw AI Response:")
-        print("─────────────────────────────────────")
-        print(content)
-        print("─────────────────────────────────────")
+        AppLog.debug("🤖 [AIService] Raw AI Response:")
+        AppLog.debug("─────────────────────────────────────")
+        AppLog.debug(content)
+        AppLog.debug("─────────────────────────────────────")
 
         // Clean content (remove markdown code blocks if present)
         let cleanContent = content
@@ -389,12 +389,12 @@ final class AIService {
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        print("🧹 [AIService] Cleaned JSON:")
-        print(cleanContent)
+        AppLog.debug("🧹 [AIService] Cleaned JSON:")
+        AppLog.debug(cleanContent)
 
         // Parse JSON response
         guard let jsonData = cleanContent.data(using: .utf8) else {
-            print("❌ [AIService] Failed to convert response to data")
+            AppLog.debug("❌ [AIService] Failed to convert response to data")
             throw AppError.unknown("Failed to convert response to data")
         }
 
@@ -403,7 +403,7 @@ final class AIService {
         // Check if it's a valid receipt
         if parsedResponse.isReceipt == false {
             let errorMsg = parsedResponse.error ?? "Ini bukan struk pembayaran yang valid"
-            print("❌ [AIService] Not a receipt: \(errorMsg)")
+            AppLog.debug("❌ [AIService] Not a receipt: \(errorMsg)")
             throw AppError.unknown(errorMsg)
         }
 
@@ -412,25 +412,25 @@ final class AIService {
               let totalAmount = parsedResponse.totalAmount,
               let currency = parsedResponse.currency,
               let items = parsedResponse.items else {
-            print("❌ [AIService] Missing required receipt fields")
+            AppLog.debug("❌ [AIService] Missing required receipt fields")
             throw AppError.unknown("Data struk tidak lengkap. Pastikan foto menampilkan informasi struk dengan jelas.")
         }
 
-        print("✅ [AIService] Successfully parsed receipt:")
-        print("   📝 Bill Name: \(billName)")
-        print("   💰 Total: \(currency) \(totalAmount) (raw: \(totalAmount))")
-        print("   🏷️  Category: \(parsedResponse.category ?? "nil")")
-        print("   📦 Items from AI: \(items.count)")
+        AppLog.debug("✅ [AIService] Successfully parsed receipt:")
+        AppLog.debug("   📝 Bill Name: \(billName)")
+        AppLog.debug("   💰 Total: \(currency) \(totalAmount) (raw: \(totalAmount))")
+        AppLog.debug("   🏷️  Category: \(parsedResponse.category ?? "nil")")
+        AppLog.debug("   📦 Items from AI: \(items.count)")
         for (idx, item) in items.enumerated() {
             if let price = item.price {
                 let qty = item.quantity ?? 1
                 let lineTotal = price * Double(qty)
-                print("      \(idx+1). '\(item.name)' - qty:\(qty) × \(currency) \(price) = \(lineTotal)")
+                AppLog.debug("      \(idx+1). '\(item.name)' - qty:\(qty) × \(currency) \(price) = \(lineTotal)")
             } else {
-                print("      \(idx+1). '\(item.name)' - (no price)")
+                AppLog.debug("      \(idx+1). '\(item.name)' - (no price)")
             }
         }
-        print("   ⚠️ Note: If qty=1 but name contains '2 xxx', post-processing will fix it")
+        AppLog.debug("   ⚠️ Note: If qty=1 but name contains '2 xxx', post-processing will fix it")
 
         // Auto-fix amounts that are too small (AI misinterpreted dots as decimals)
         var fixedTotalAmount = totalAmount
@@ -460,7 +460,7 @@ final class AIService {
                     // This is a discount item, extract the value
                     let discValue = abs(item.price ?? 0)
                     extractedDiscount += discValue
-                    print("🏷️ [AIService] Extracted discount from item: \(item.name) = \(discValue)")
+                    AppLog.debug("🏷️ [AIService] Extracted discount from item: \(item.name) = \(discValue)")
                 } else {
                     regularItems.append(item)
                 }
@@ -470,7 +470,7 @@ final class AIService {
             if extractedDiscount > 0 {
                 let existingDiscount = fixedDiscount ?? 0
                 fixedDiscount = existingDiscount + extractedDiscount
-                print("🏷️ [AIService] Total discount: \(existingDiscount) + \(extractedDiscount) = \(fixedDiscount ?? 0)")
+                AppLog.debug("🏷️ [AIService] Total discount: \(existingDiscount) + \(extractedDiscount) = \(fixedDiscount ?? 0)")
             }
 
             // Use only regular items (without discount items)
@@ -508,9 +508,9 @@ final class AIService {
                         if let lineTotal = fixedItem.price {
                             let unitPrice = lineTotal / Double(detectedQty)
                             fixedItem.price = unitPrice
-                            print("🔧 [AIService] Fixed quantity for '\(item.name)':")
-                            print("   Original: qty=1, lineTotal=\(lineTotal)")
-                            print("   Fixed: qty=\(detectedQty), unitPrice=\(unitPrice), name='\(cleanedName)'")
+                            AppLog.debug("🔧 [AIService] Fixed quantity for '\(item.name)':")
+                            AppLog.debug("   Original: qty=1, lineTotal=\(lineTotal)")
+                            AppLog.debug("   Fixed: qty=\(detectedQty), unitPrice=\(unitPrice), name='\(cleanedName)'")
                         }
                     }
                 }
@@ -538,13 +538,13 @@ final class AIService {
                 // Rounding should be small (usually < 1000)
                 // If it's too large, it might have been misread
                 if abs(rounding) > 1000 {
-                    print("⚠️ [AIService] Rounding value seems too large: \(rounding)")
+                    AppLog.debug("⚠️ [AIService] Rounding value seems too large: \(rounding)")
                     // Check if it should be divided by 1000
                     if abs(rounding) >= 1000 && abs(rounding) < 10000 {
                         // Might be correct, keep it
                     }
                 }
-                print("ℹ️ [AIService] Rounding: \(rounding)")
+                AppLog.debug("ℹ️ [AIService] Rounding: \(rounding)")
             }
 
             // Cross-validation: Check if items sum is close to total
@@ -553,13 +553,13 @@ final class AIService {
             let expectedTotalWithExtras = itemsSum + extras
             let expectedTotalWithoutExtras = itemsSum + (fixedRounding ?? 0) - (fixedDiscount ?? 0)
 
-            print("📊 [AIService] Cross-validation:")
-            print("   Items sum: \(itemsSum)")
-            print("   Tax: \(fixedTaxAmount ?? 0), Service: \(fixedServiceCharge ?? 0)")
-            print("   Discount: \(fixedDiscount ?? 0), Rounding: \(fixedRounding ?? 0)")
-            print("   Expected (with tax+service): \(expectedTotalWithExtras)")
-            print("   Expected (without tax+service): \(expectedTotalWithoutExtras)")
-            print("   Actual total: \(fixedTotalAmount)")
+            AppLog.debug("📊 [AIService] Cross-validation:")
+            AppLog.debug("   Items sum: \(itemsSum)")
+            AppLog.debug("   Tax: \(fixedTaxAmount ?? 0), Service: \(fixedServiceCharge ?? 0)")
+            AppLog.debug("   Discount: \(fixedDiscount ?? 0), Rounding: \(fixedRounding ?? 0)")
+            AppLog.debug("   Expected (with tax+service): \(expectedTotalWithExtras)")
+            AppLog.debug("   Expected (without tax+service): \(expectedTotalWithoutExtras)")
+            AppLog.debug("   Actual total: \(fixedTotalAmount)")
 
             if fixedTotalAmount > 0 {
                 // Check if tax is informational (already included in item prices)
@@ -570,16 +570,16 @@ final class AIService {
                 // then tax is probably informational (set to null)
                 if diffWithoutTax < diffWithTax && diffWithoutTax < fixedTotalAmount * 0.05 {
                     if fixedTaxAmount != nil && fixedTaxAmount! > 0 {
-                        print("ℹ️ [AIService] Tax appears to be INFORMATIONAL (already in prices)")
-                        print("   Setting taxAmount to null")
+                        AppLog.debug("ℹ️ [AIService] Tax appears to be INFORMATIONAL (already in prices)")
+                        AppLog.debug("   Setting taxAmount to null")
                         fixedTaxAmount = nil
                     }
                     if fixedServiceCharge != nil && fixedServiceCharge! > 0 {
                         // Also check service charge
                         let diffWithoutService = abs(fixedTotalAmount - itemsSum + (fixedRounding ?? 0) - (fixedDiscount ?? 0))
                         if diffWithoutService < fixedTotalAmount * 0.05 {
-                            print("ℹ️ [AIService] Service charge appears to be INFORMATIONAL")
-                            print("   Setting serviceCharge to null")
+                            AppLog.debug("ℹ️ [AIService] Service charge appears to be INFORMATIONAL")
+                            AppLog.debug("   Setting serviceCharge to null")
                             fixedServiceCharge = nil
                         }
                     }
@@ -591,10 +591,10 @@ final class AIService {
                 let tolerance = fixedTotalAmount * 0.1  // 10% tolerance
 
                 if finalDiff > tolerance {
-                    print("⚠️ [AIService] WARNING: Total (\(fixedTotalAmount)) doesn't match calculated (\(finalExpected))")
-                    print("   Difference: \(finalDiff) (tolerance: \(tolerance))")
+                    AppLog.debug("⚠️ [AIService] WARNING: Total (\(fixedTotalAmount)) doesn't match calculated (\(finalExpected))")
+                    AppLog.debug("   Difference: \(finalDiff) (tolerance: \(tolerance))")
                 } else {
-                    print("✅ [AIService] Validation passed: Total matches calculated amount")
+                    AppLog.debug("✅ [AIService] Validation passed: Total matches calculated amount")
                 }
             }
         }
@@ -613,7 +613,7 @@ final class AIService {
             rounding: fixedRounding
         )
 
-        print("🎉 [AIService] Parsing completed successfully!")
+        AppLog.debug("🎉 [AIService] Parsing completed successfully!")
         return result
     }
 
@@ -635,10 +635,10 @@ final class AIService {
             .image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
 
         guard let jpegData = resized.jpegData(compressionQuality: 0.6) else {
-            print("⚠️ [AIService] Could not JPEG-encode receipt photo, sending text only")
+            AppLog.debug("⚠️ [AIService] Could not JPEG-encode receipt photo, sending text only")
             return nil
         }
-        print("🖼️ [AIService] Receipt photo encoded: \(Int(newSize.width))x\(Int(newSize.height)), \(jpegData.count / 1024) KB")
+        AppLog.debug("🖼️ [AIService] Receipt photo encoded: \(Int(newSize.width))x\(Int(newSize.height)), \(jpegData.count / 1024) KB")
         return jpegData.base64EncodedString()
     }
 
@@ -648,7 +648,7 @@ final class AIService {
     /// timeout, dropped connection) — common on mobile networks.
     private func performChatRequest(body: [String: Any]) async throws -> OpenAIResponse {
         guard let url = URL(string: apiEndpoint) else {
-            print("❌ [AIService] Invalid API endpoint")
+            AppLog.debug("❌ [AIService] Invalid API endpoint")
             throw AppError.unknown("Invalid API endpoint")
         }
 
@@ -665,11 +665,11 @@ final class AIService {
                 let (data, response) = try await URLSession.shared.data(for: request)
 
                 guard let httpResponse = response as? HTTPURLResponse else {
-                    print("❌ [AIService] Invalid HTTP response")
+                    AppLog.debug("❌ [AIService] Invalid HTTP response")
                     throw AppError.unknown("Invalid response")
                 }
 
-                print("📡 [AIService] Response status: \(httpResponse.statusCode)")
+                AppLog.debug("📡 [AIService] Response status: \(httpResponse.statusCode)")
 
                 if httpResponse.statusCode == 200 {
                     return try JSONDecoder().decode(OpenAIResponse.self, from: data)
@@ -678,16 +678,16 @@ final class AIService {
                 let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
                 let isTransient = httpResponse.statusCode == 429 || httpResponse.statusCode >= 500
                 if isTransient && attempt < maxAttempts {
-                    print("⚠️ [AIService] Transient API error (\(httpResponse.statusCode)), retrying...")
+                    AppLog.debug("⚠️ [AIService] Transient API error (\(httpResponse.statusCode)), retrying...")
                     try await Task.sleep(nanoseconds: 1_500_000_000)
                     continue
                 }
-                print("❌ [AIService] API Error (\(httpResponse.statusCode)): \(errorMessage)")
+                AppLog.debug("❌ [AIService] API Error (\(httpResponse.statusCode)): \(errorMessage)")
                 throw AppError.unknown("API Error (\(httpResponse.statusCode)): \(errorMessage)")
             } catch let error as URLError {
                 let isTransient = error.code == .timedOut || error.code == .networkConnectionLost
                 if isTransient && attempt < maxAttempts {
-                    print("⚠️ [AIService] Network error (\(error.code.rawValue)), retrying...")
+                    AppLog.debug("⚠️ [AIService] Network error (\(error.code.rawValue)), retrying...")
                     try await Task.sleep(nanoseconds: 1_500_000_000)
                     continue
                 }
@@ -721,7 +721,7 @@ final class AIService {
             var cleanedName = String(trimmedName[nameRange]).trimmingCharacters(in: .whitespaces)
             // Don't extract if qty is 1 or remaining name is just numbers (like "1pc" becoming "pc")
             if qty > 1 && qty <= 99 && !cleanedName.isEmpty && cleanedName.first?.isLetter == true {
-                print("   🔍 [extractQty] Pattern 1 matched: '\(trimmedName)' -> qty=\(qty), name='\(cleanedName)'")
+                AppLog.debug("   🔍 [extractQty] Pattern 1 matched: '\(trimmedName)' -> qty=\(qty), name='\(cleanedName)'")
                 return (qty, cleanedName)
             }
         }
@@ -736,7 +736,7 @@ final class AIService {
             let qty = Int(trimmedName[qtyRange]) ?? 1
             let cleanedName = String(trimmedName[nameRange]).trimmingCharacters(in: .whitespaces)
             if qty > 1 && qty <= 99 {
-                print("   🔍 [extractQty] Pattern 2 matched: '\(trimmedName)' -> qty=\(qty), name='\(cleanedName)'")
+                AppLog.debug("   🔍 [extractQty] Pattern 2 matched: '\(trimmedName)' -> qty=\(qty), name='\(cleanedName)'")
                 return (qty, cleanedName)
             }
         }
@@ -751,7 +751,7 @@ final class AIService {
             let qty = Int(trimmedName[qtyRange]) ?? 1
             let cleanedName = String(trimmedName[nameRange]).trimmingCharacters(in: .whitespaces)
             if qty > 1 && qty <= 99 {
-                print("   🔍 [extractQty] Pattern 3 matched: '\(trimmedName)' -> qty=\(qty), name='\(cleanedName)'")
+                AppLog.debug("   🔍 [extractQty] Pattern 3 matched: '\(trimmedName)' -> qty=\(qty), name='\(cleanedName)'")
                 return (qty, cleanedName)
             }
         }
@@ -782,7 +782,7 @@ final class AIService {
 
         if isCheapItem && amount < 1000 && amount > 0 {
             // This is likely a legitimate cheap item, don't auto-fix
-            print("ℹ️ [AIService] SKIP FIX: \(context) = \(amount) (legitimate cheap item)")
+            AppLog.debug("ℹ️ [AIService] SKIP FIX: \(context) = \(amount) (legitimate cheap item)")
             return amount
         }
 
@@ -800,7 +800,7 @@ final class AIService {
             // 2. Or is unrealistically small for a non-cheap item (< 100)
             if decimalPart > 0 || amount < 100 {
                 fixed = amount * 1000
-                print("⚠️ [AIService] AUTO-FIX: \(context) \(amount) → \(fixed) (×1000)")
+                AppLog.debug("⚠️ [AIService] AUTO-FIX: \(context) \(amount) → \(fixed) (×1000)")
             }
         }
 
@@ -810,7 +810,7 @@ final class AIService {
         if decimalPart > 0 && decimalPart < 1 && amount < 10000 && !isCheapItem {
             // Small number with decimal - likely wrong
             fixed = amount * 1000
-            print("⚠️ [AIService] AUTO-FIX (decimal): \(context) \(amount) → \(fixed) (×1000)")
+            AppLog.debug("⚠️ [AIService] AUTO-FIX (decimal): \(context) \(amount) → \(fixed) (×1000)")
         }
 
         return fixed
@@ -818,7 +818,7 @@ final class AIService {
 
     // MARK: - Create Mock Parsed Receipt (Fallback untuk struk Indonesia)
     private func createMockParsedReceipt(from ocrText: String) -> ParsedReceiptModel {
-        print("🔄 [AIService] Using fallback mock parser for Indonesian receipt")
+        AppLog.debug("🔄 [AIService] Using fallback mock parser for Indonesian receipt")
 
         // Extract merchant name (first non-empty line)
         let lines = ocrText.components(separatedBy: .newlines)
@@ -826,7 +826,7 @@ final class AIService {
             .filter { !$0.isEmpty }
 
         let merchantName = lines.first ?? "Merchant Tidak Diketahui"
-        print("   📝 Merchant: \(merchantName)")
+        AppLog.debug("   📝 Merchant: \(merchantName)")
 
         // Try to extract total amount using regex (Indonesian format)
         // Pattern mencari: TOTAL, GRAND TOTAL, JUMLAH diikuti angka dengan format Indonesia (50.000)
@@ -842,9 +842,9 @@ final class AIService {
                 .replacingOccurrences(of: " ", with: "")  // Remove spaces
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             totalAmount = Double(raw) ?? 0.0
-            print("   💰 Total found: \(totalAmount)")
+            AppLog.debug("   💰 Total found: \(totalAmount)")
         } else {
-            print("   ⚠️ Total not found in receipt")
+            AppLog.debug("   ⚠️ Total not found in receipt")
         }
 
         // Detect currency (Indonesia)
@@ -857,7 +857,7 @@ final class AIService {
 
         if let itemRegex = try? NSRegularExpression(pattern: itemPattern) {
             let matches = itemRegex.matches(in: ocrText, range: NSRange(ocrText.startIndex..., in: ocrText))
-            print("   📦 Found \(matches.count) potential items")
+            AppLog.debug("   📦 Found \(matches.count) potential items")
 
             for match in matches {
                 if let nameRange = Range(match.range(at: 1), in: ocrText),
@@ -877,7 +877,7 @@ final class AIService {
                        !name.lowercased().contains("pajak"),
                        !name.lowercased().contains("service") {
                         items.append(ReceiptItem(name: name, price: price, quantity: 1))
-                        print("      ✓ \(name) - Rp \(price)")
+                        AppLog.debug("      ✓ \(name) - Rp \(price)")
                     }
                 }
             }
@@ -901,7 +901,7 @@ final class AIService {
             category = "Shopping"
         }
 
-        print("   🏷️  Category: \(category ?? "nil")")
+        AppLog.debug("   🏷️  Category: \(category ?? "nil")")
 
         let result = ParsedReceiptModel(
             billName: merchantName,
@@ -916,7 +916,7 @@ final class AIService {
             rounding: nil
         )
 
-        print("✅ [AIService] Mock parsing completed")
+        AppLog.debug("✅ [AIService] Mock parsing completed")
         return result
     }
 }

@@ -111,12 +111,12 @@ extension AddExpenseView {
                         if split.portion == 0 {
                             items[index].selectedParticipantIDs.remove(participantId)
                             items[index].customSplits.removeValue(forKey: participantId)
-                            print("🔴 [AddExpenseView] Removed \(split.name) from \(item.name) (0 porsi)")
+                            AppLog.debug("🔴 [AddExpenseView] Removed \(split.name) from \(item.name) (0 porsi)")
                         } else {
-                            print("   👤 \(split.name): \(split.portion) porsi = \(trip.currency) \(Int(split.customAmount))")
+                            AppLog.debug("   👤 \(split.name): \(split.portion) porsi = \(trip.currency) \(Int(split.customAmount))")
                         }
                     }
-                    print("✅ [AddExpenseView] Custom splits saved for \(item.name)")
+                    AppLog.debug("✅ [AddExpenseView] Custom splits saved for \(item.name)")
                 }
             }
         )

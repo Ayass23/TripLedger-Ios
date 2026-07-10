@@ -165,7 +165,7 @@ struct HomeView: View {
                 let expenses = snapshot.documents.compactMap { try? $0.data(as: ExpenseModel.self) }
                 fetchedExpenses.append(contentsOf: expenses)
             } catch {
-                print("Failed to fetch expenses for trip \(tripID): \(error)")
+                AppLog.debug("Failed to fetch expenses for trip \(tripID): \(error)")
             }
         }
         

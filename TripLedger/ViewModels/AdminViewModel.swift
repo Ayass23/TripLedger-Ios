@@ -29,13 +29,13 @@ final class AdminViewModel: ObservableObject {
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
                 if let error = error {
-                    print("❌ [AdminVM] Error listening to users: \(error)")
+                    AppLog.debug("❌ [AdminVM] Error listening to users: \(error)")
                     self?.errorMessage = error.localizedDescription
                     return
                 }
 
                 self?.allUsers = snapshot?.documents.compactMap { try? $0.data(as: UserModel.self) } ?? []
-                print("✅ [AdminVM] Loaded \(self?.allUsers.count ?? 0) users (real-time)")
+                AppLog.debug("✅ [AdminVM] Loaded \(self?.allUsers.count ?? 0) users (real-time)")
             }
     }
 
@@ -50,10 +50,10 @@ final class AdminViewModel: ObservableObject {
                 .getDocuments()
 
             allUsers = snapshot.documents.compactMap { try? $0.data(as: UserModel.self) }
-            print("✅ [AdminVM] Loaded \(allUsers.count) users")
+            AppLog.debug("✅ [AdminVM] Loaded \(allUsers.count) users")
         } catch {
             errorMessage = error.localizedDescription
-            print("❌ [AdminVM] Error loading users: \(error)")
+            AppLog.debug("❌ [AdminVM] Error loading users: \(error)")
         }
     }
 
@@ -65,13 +65,13 @@ final class AdminViewModel: ObservableObject {
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
                 if let error = error {
-                    print("❌ [AdminVM] Error listening to reports: \(error)")
+                    AppLog.debug("❌ [AdminVM] Error listening to reports: \(error)")
                     self?.errorMessage = error.localizedDescription
                     return
                 }
 
                 self?.allReports = snapshot?.documents.compactMap { try? $0.data(as: ReportModel.self) } ?? []
-                print("✅ [AdminVM] Loaded \(self?.allReports.count ?? 0) reports")
+                AppLog.debug("✅ [AdminVM] Loaded \(self?.allReports.count ?? 0) reports")
             }
     }
 
@@ -83,13 +83,13 @@ final class AdminViewModel: ObservableObject {
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
                 if let error = error {
-                    print("❌ [AdminVM] Error listening to appeals: \(error)")
+                    AppLog.debug("❌ [AdminVM] Error listening to appeals: \(error)")
                     self?.errorMessage = error.localizedDescription
                     return
                 }
 
                 self?.allAppeals = snapshot?.documents.compactMap { try? $0.data(as: AccountAppeal.self) } ?? []
-                print("✅ [AdminVM] Loaded \(self?.allAppeals.count ?? 0) appeals")
+                AppLog.debug("✅ [AdminVM] Loaded \(self?.allAppeals.count ?? 0) appeals")
             }
     }
 
@@ -106,7 +106,7 @@ final class AdminViewModel: ObservableObject {
                 documentID: uid,
                 fields: fields
             )
-            print("✅ [AdminVM] User \(uid) suspended with reason: \(reason ?? "N/A")")
+            AppLog.debug("✅ [AdminVM] User \(uid) suspended with reason: \(reason ?? "N/A")")
 
             // Transfer ownership of trips where this user is owner
             await transferOwnershipFromSuspendedUser(uid: uid)
@@ -115,7 +115,7 @@ final class AdminViewModel: ObservableObject {
             await loadAllUsers()
         } catch {
             errorMessage = error.localizedDescription
-            print("❌ [AdminVM] Error suspending user: \(error)")
+            AppLog.debug("❌ [AdminVM] Error suspending user: \(error)")
         }
     }
 
@@ -146,7 +146,7 @@ final class AdminViewModel: ObservableObject {
 
                 guard let newOwner = newOwnerUID else {
                     // No eligible member to become owner, delete the trip
-                    print("⚠️ [AdminVM] No eligible new owner for trip \(trip.name) - deleting trip")
+                    AppLog.debug("⚠️ [AdminVM] No eligible new owner for trip \(trip.name) - deleting trip")
 
                     // Delete all expenses for this trip
                     let expensesSnapshot = try await db.db.collection(Collection.expenses)
@@ -167,7 +167,7 @@ final class AdminViewModel: ObservableObject {
                     // Delete the trip document
                     try await db.db.collection(Collection.trips).document(tripID).delete()
 
-                    print("✅ [AdminVM] Deleted orphan trip '\(trip.name)' (no eligible owner after suspension)")
+                    AppLog.debug("✅ [AdminVM] Deleted orphan trip '\(trip.name)' (no eligible owner after suspension)")
                     continue
                 }
 
@@ -217,7 +217,7 @@ final class AdminViewModel: ObservableObject {
                     "members": memberDicts
                 ])
 
-                print("✅ [AdminVM] Transferred ownership of trip '\(trip.name)' from \(uid) to \(newOwner)")
+                AppLog.debug("✅ [AdminVM] Transferred ownership of trip '\(trip.name)' from \(uid) to \(newOwner)")
 
                 // Send notification to new owner
                 let notification = NotificationModel(
@@ -234,7 +234,7 @@ final class AdminViewModel: ObservableObject {
                 try await db.db.collection(Collection.notifications).addDocument(from: notification)
             }
         } catch {
-            print("❌ [AdminVM] Error transferring ownership: \(error)")
+            AppLog.debug("❌ [AdminVM] Error transferring ownership: \(error)")
         }
     }
 
@@ -249,13 +249,13 @@ final class AdminViewModel: ObservableObject {
                     "suspendReason": FieldValue.delete() // Clear suspend reason
                 ]
             )
-            print("✅ [AdminVM] User \(uid) unsuspended")
+            AppLog.debug("✅ [AdminVM] User \(uid) unsuspended")
 
             // Refresh users list
             await loadAllUsers()
         } catch {
             errorMessage = error.localizedDescription
-            print("❌ [AdminVM] Error unsuspending user: \(error)")
+            AppLog.debug("❌ [AdminVM] Error unsuspending user: \(error)")
         }
     }
 
@@ -277,10 +277,10 @@ final class AdminViewModel: ObservableObject {
                 documentID: reportID,
                 fields: fields
             )
-            print("✅ [AdminVM] Report \(reportID) updated to \(status.rawValue)")
+            AppLog.debug("✅ [AdminVM] Report \(reportID) updated to \(status.rawValue)")
         } catch {
             errorMessage = error.localizedDescription
-            print("❌ [AdminVM] Error updating report: \(error)")
+            AppLog.debug("❌ [AdminVM] Error updating report: \(error)")
         }
     }
 
@@ -317,9 +317,9 @@ final class AdminViewModel: ObservableObject {
                 createdAt: Timestamp(date: Date())
             )
             try await db.db.collection(Collection.notifications).addDocument(from: notification)
-            print("✅ [AdminVM] Notification sent to reporter \(report.reporterUID)")
+            AppLog.debug("✅ [AdminVM] Notification sent to reporter \(report.reporterUID)")
         } catch {
-            print("⚠️ [AdminVM] Failed to send notification to reporter: \(error)")
+            AppLog.debug("⚠️ [AdminVM] Failed to send notification to reporter: \(error)")
         }
     }
 
@@ -352,9 +352,9 @@ final class AdminViewModel: ObservableObject {
                 createdAt: Timestamp(date: Date())
             )
             try await db.db.collection(Collection.notifications).addDocument(from: notification)
-            print("✅ [AdminVM] Notification sent to reporter \(report.reporterUID)")
+            AppLog.debug("✅ [AdminVM] Notification sent to reporter \(report.reporterUID)")
         } catch {
-            print("⚠️ [AdminVM] Failed to send notification to reporter: \(error)")
+            AppLog.debug("⚠️ [AdminVM] Failed to send notification to reporter: \(error)")
         }
     }
 
@@ -421,12 +421,12 @@ final class AdminViewModel: ObservableObject {
 
             try await db.db.collection(Collection.notifications).addDocument(from: notification)
 
-            print("✅ [AdminVM] Appeal approved and user unsuspended")
+            AppLog.debug("✅ [AdminVM] Appeal approved and user unsuspended")
             errorMessage = nil
 
         } catch {
             errorMessage = error.localizedDescription
-            print("❌ [AdminVM] Error approving appeal: \(error)")
+            AppLog.debug("❌ [AdminVM] Error approving appeal: \(error)")
         }
     }
 
@@ -459,7 +459,7 @@ final class AdminViewModel: ObservableObject {
                     documentID: appeal.userUID,
                     fields: ["suspendReason": notes]
                 )
-                print("✅ [AdminVM] Updated user suspend reason with rejection notes")
+                AppLog.debug("✅ [AdminVM] Updated user suspend reason with rejection notes")
             }
 
             // 3. Send notification to user
@@ -477,12 +477,12 @@ final class AdminViewModel: ObservableObject {
 
             try await db.db.collection(Collection.notifications).addDocument(from: notification)
 
-            print("✅ [AdminVM] Appeal rejected")
+            AppLog.debug("✅ [AdminVM] Appeal rejected")
             errorMessage = nil
 
         } catch {
             errorMessage = error.localizedDescription
-            print("❌ [AdminVM] Error rejecting appeal: \(error)")
+            AppLog.debug("❌ [AdminVM] Error rejecting appeal: \(error)")
         }
     }
 }

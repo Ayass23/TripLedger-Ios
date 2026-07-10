@@ -465,7 +465,7 @@ struct AddExpenseView: View {
         do {
             suspendedMemberUIDs = try await FirestoreService.shared.fetchSuspendedMemberUIDs(memberUIDs: memberUIDs)
         } catch {
-            print("Error loading suspended members: \(error)")
+            AppLog.debug("Error loading suspended members: \(error)")
         }
     }
 

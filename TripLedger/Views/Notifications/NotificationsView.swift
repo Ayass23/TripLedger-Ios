@@ -91,7 +91,7 @@ struct NotificationsView: View {
                                             .onTapGesture {
                                                 selectedNotification = notif
                                                 selectedNotificationID = notif.id
-                                                print("📱 [NotifView] Tapped invitation notification - ID: \(notif.id ?? "nil")")
+                                                AppLog.debug("📱 [NotifView] Tapped invitation notification - ID: \(notif.id ?? "nil")")
                                                 showNotificationDetail = true
                                             }
                                     case .invite(let invite):
@@ -184,14 +184,14 @@ struct NotificationsView: View {
             // paymentRejected will show rejection reason in body message
             selectedNotification = notif
             selectedNotificationID = notif.id
-            print("📱 [NotifView] Tapped regular notification - ID: \(notif.id ?? "nil")")
+            AppLog.debug("📱 [NotifView] Tapped regular notification - ID: \(notif.id ?? "nil")")
             showNotificationDetail = true
         }
     }
 
     private func fetchAndShowSettlement(notif: NotificationModel) async {
         guard let settlementID = notif.referenceID else {
-            print("❌ [NotifView] No referenceID for settlement notification")
+            AppLog.debug("❌ [NotifView] No referenceID for settlement notification")
             return
         }
 
@@ -211,7 +211,7 @@ struct NotificationsView: View {
                 await notifVM.markAsRead(notificationID: notifID)
             }
         } catch {
-            print("❌ [NotifView] Failed to fetch settlement: \(error)")
+            AppLog.debug("❌ [NotifView] Failed to fetch settlement: \(error)")
         }
     }
 
@@ -505,10 +505,10 @@ struct NotificationDetailSheet: View {
             }
             .onAppear {
                 // Debug: Print notification info
-                print("📋 [NotificationDetail] Notification ID (passed): \(notificationID ?? "nil")")
-                print("📋 [NotificationDetail] Notification ID (model): \(notification.id ?? "nil")")
-                print("📋 [NotificationDetail] Reference ID: \(notification.referenceID ?? "nil")")
-                print("📋 [NotificationDetail] Type: \(notification.type.rawValue)")
+                AppLog.debug("📋 [NotificationDetail] Notification ID (passed): \(notificationID ?? "nil")")
+                AppLog.debug("📋 [NotificationDetail] Notification ID (model): \(notification.id ?? "nil")")
+                AppLog.debug("📋 [NotificationDetail] Reference ID: \(notification.referenceID ?? "nil")")
+                AppLog.debug("📋 [NotificationDetail] Type: \(notification.type.rawValue)")
 
                 // Mark as read when sheet appears - EXCEPT for actionable invitations
                 // Skip auto mark-as-read for:
@@ -522,11 +522,11 @@ struct NotificationDetailSheet: View {
                         if let id = notificationID ?? notification.id {
                             await notifVM.markAsRead(notificationID: id)
                         } else {
-                            print("⚠️ [NotificationDetail] Cannot mark as read - notification ID is nil")
+                            AppLog.debug("⚠️ [NotificationDetail] Cannot mark as read - notification ID is nil")
                         }
                     }
                 } else {
-                    print("📋 [NotificationDetail] Skipping auto mark-as-read for actionable invitation: \(notification.title)")
+                    AppLog.debug("📋 [NotificationDetail] Skipping auto mark-as-read for actionable invitation: \(notification.title)")
                 }
             }
         }
@@ -538,19 +538,19 @@ struct NotificationDetailSheet: View {
             Button {
                 Task {
                     guard let requestID = notification.referenceID, !requestID.isEmpty else {
-                        print("❌ No referenceID found in notification")
+                        AppLog.debug("❌ No referenceID found in notification")
                         return
                     }
 
                     // Use passed notificationID or fallback to notification.id
                     let notifID = notificationID ?? notification.id
                     guard let finalNotifID = notifID, !finalNotifID.isEmpty else {
-                        print("❌ No notification ID found (passed: \(notificationID ?? "nil"), model: \(notification.id ?? "nil"))")
+                        AppLog.debug("❌ No notification ID found (passed: \(notificationID ?? "nil"), model: \(notification.id ?? "nil"))")
                         return
                     }
 
                     isProcessing = true
-                    print("🔄 Rejecting friend request: \(requestID), notifID: \(finalNotifID)")
+                    AppLog.debug("🔄 Rejecting friend request: \(requestID), notifID: \(finalNotifID)")
 
                     // Decline the friend request
                     await friendsVM.declineFriendRequestByID(requestID: requestID, notificationID: nil)
@@ -595,29 +595,29 @@ struct NotificationDetailSheet: View {
             Button {
                 Task {
                     guard let requestID = notification.referenceID, !requestID.isEmpty else {
-                        print("❌ No referenceID found in notification")
+                        AppLog.debug("❌ No referenceID found in notification")
                         return
                     }
                     guard let user = authVM.currentUser else {
-                        print("❌ No current user found")
+                        AppLog.debug("❌ No current user found")
                         return
                     }
 
                     // Use passed notificationID or fallback to notification.id
                     let notifID = notificationID ?? notification.id
                     guard let finalNotifID = notifID, !finalNotifID.isEmpty else {
-                        print("❌ No notification ID found (passed: \(notificationID ?? "nil"), model: \(notification.id ?? "nil"))")
+                        AppLog.debug("❌ No notification ID found (passed: \(notificationID ?? "nil"), model: \(notification.id ?? "nil"))")
                         return
                     }
 
                     isProcessing = true
-                    print("🔄 Accepting friend request: \(requestID), notifID: \(finalNotifID)")
+                    AppLog.debug("🔄 Accepting friend request: \(requestID), notifID: \(finalNotifID)")
 
                     // Accept the friend request
                     await friendsVM.acceptFriendRequestByID(requestID: requestID, currentUser: user, notificationID: nil)
 
                     if friendsVM.errorMessage == nil {
-                        print("✅ Request accepted, refreshing user data")
+                        AppLog.debug("✅ Request accepted, refreshing user data")
                         await authVM.refreshUser()
                         if let updatedUser = authVM.currentUser {
                             await friendsVM.loadFriends(currentUser: updatedUser)
@@ -631,7 +631,7 @@ struct NotificationDetailSheet: View {
                         alertMessage = "Sekarang kamu dan \(senderName) sudah berteman! 🎉"
                         showSuccessAlert = true
                     } else {
-                        print("❌ Error accepting request: \(friendsVM.errorMessage ?? "unknown")")
+                        AppLog.debug("❌ Error accepting request: \(friendsVM.errorMessage ?? "unknown")")
                         onDismiss()
                     }
 

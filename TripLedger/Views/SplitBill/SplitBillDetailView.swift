@@ -279,7 +279,7 @@ struct SplitBillDetailView: View {
                 }
             } else {
                 await MainActor.run {
-                    print("❌ Failed to generate PDF")
+                    AppLog.debug("❌ Failed to generate PDF")
                     isGeneratingPDF = false
                 }
             }
@@ -289,7 +289,7 @@ struct SplitBillDetailView: View {
     // MARK: - Download Image Async
     private func downloadImage(from urlString: String) async -> UIImage? {
         guard let url = URL(string: urlString) else {
-            print("❌ Invalid URL: \(urlString)")
+            AppLog.debug("❌ Invalid URL: \(urlString)")
             return nil
         }
 
@@ -297,7 +297,7 @@ struct SplitBillDetailView: View {
             let (data, _) = try await URLSession.shared.data(from: url)
             return UIImage(data: data)
         } catch {
-            print("❌ Failed to download image: \(error.localizedDescription)")
+            AppLog.debug("❌ Failed to download image: \(error.localizedDescription)")
             return nil
         }
     }
@@ -340,21 +340,21 @@ struct ParticipantRow: View {
             if participant.isPaid {
                 if isOwner && isEditing {
                     Button {
-                        print("👉 [ParticipantRow] Tombol 'Batal Lunas' diklik untuk: \(participant.displayName)")
+                        AppLog.debug("👉 [ParticipantRow] Tombol 'Batal Lunas' diklik untuk: \(participant.displayName)")
                         
                         // Optimistic UI Update
                         if let idx = bill.participants.firstIndex(where: { $0.id == participant.id }) {
                             bill.participants[idx].isPaid = false
                             bill.status = .active
-                            print("⚡️ [ParticipantRow] Optimistic Update: \(participant.displayName) dikembalikan ke Belum Lunas.")
+                            AppLog.debug("⚡️ [ParticipantRow] Optimistic Update: \(participant.displayName) dikembalikan ke Belum Lunas.")
                         }
                         
                         Task {
                             if let id = bill.id {
-                                print("🚀 [ParticipantRow] Memanggil splitBillVM.toggleParticipantPaidStatus (isPaid: false)...")
+                                AppLog.debug("🚀 [ParticipantRow] Memanggil splitBillVM.toggleParticipantPaidStatus (isPaid: false)...")
                                 await splitBillVM.toggleParticipantPaidStatus(billID: id, participantID: participant.id, isPaid: false)
                             } else {
-                                print("🚨 [ParticipantRow] ERROR: bill.id KOSONG!")
+                                AppLog.debug("🚨 [ParticipantRow] ERROR: bill.id KOSONG!")
                             }
                         }
                     } label: {
@@ -370,27 +370,27 @@ struct ParticipantRow: View {
             } else {
                 if isOwner {
                     Button {
-                        print("👉 [ParticipantRow] Tombol 'Tandai Lunas' diklik untuk: \(participant.displayName)")
+                        AppLog.debug("👉 [ParticipantRow] Tombol 'Tandai Lunas' diklik untuk: \(participant.displayName)")
                         
                         // Optimistic UI Update
                         if let idx = bill.participants.firstIndex(where: { $0.id == participant.id }) {
                             bill.participants[idx].isPaid = true
-                            print("⚡️ [ParticipantRow] Optimistic Update: \(participant.displayName) isPaid diset jadi TRUE di state View lokal.")
+                            AppLog.debug("⚡️ [ParticipantRow] Optimistic Update: \(participant.displayName) isPaid diset jadi TRUE di state View lokal.")
                             
                             if bill.participants.allSatisfy({ $0.isPaid }) {
                                 bill.status = .settled
-                                print("⚡️ [ParticipantRow] Optimistic Update: Semua sudah lunas, status Tagihan lokal diset jadi SETTLED.")
+                                AppLog.debug("⚡️ [ParticipantRow] Optimistic Update: Semua sudah lunas, status Tagihan lokal diset jadi SETTLED.")
                             } else {
-                                print("⚡️ [ParticipantRow] Optimistic Update: Belum semua lunas. Status Tagihan lokal masih ACTIVE.")
+                                AppLog.debug("⚡️ [ParticipantRow] Optimistic Update: Belum semua lunas. Status Tagihan lokal masih ACTIVE.")
                             }
                         }
                         
                         Task {
                             if let id = bill.id {
-                                print("🚀 [ParticipantRow] Memanggil splitBillVM.toggleParticipantPaidStatus (isPaid: true)...")
+                                AppLog.debug("🚀 [ParticipantRow] Memanggil splitBillVM.toggleParticipantPaidStatus (isPaid: true)...")
                                 await splitBillVM.toggleParticipantPaidStatus(billID: id, participantID: participant.id, isPaid: true)
                             } else {
-                                print("🚨 [ParticipantRow] ERROR: bill.id KOSONG!")
+                                AppLog.debug("🚨 [ParticipantRow] ERROR: bill.id KOSONG!")
                             }
                         }
                     } label: {

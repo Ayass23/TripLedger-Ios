@@ -131,7 +131,7 @@ struct SplitBillView: View {
                         onSuccess: { result in
                             scannedResult = result
                             // Keep selectedReceiptImage for CreateSplitBillView
-                            print("✅ [SplitBillView] OCR Success - selectedReceiptImage still available: \(selectedReceiptImage != nil)")
+                            AppLog.debug("✅ [SplitBillView] OCR Success - selectedReceiptImage still available: \(selectedReceiptImage != nil)")
                             showProcessingPage = false
                             showScanThenCreate = true
                         },

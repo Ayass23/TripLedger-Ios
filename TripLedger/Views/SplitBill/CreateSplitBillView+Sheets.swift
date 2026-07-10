@@ -110,12 +110,12 @@ extension CreateSplitBillView {
                         if split.portion == 0 {
                             items[index].selectedParticipantIDs.remove(participantId)
                             items[index].customSplits.removeValue(forKey: participantId)
-                            print("🔴 [CreateSplitBillView] Removed \(split.name) from \(item.name) (0 porsi)")
+                            AppLog.debug("🔴 [CreateSplitBillView] Removed \(split.name) from \(item.name) (0 porsi)")
                         } else {
-                            print("   👤 \(split.name): \(split.portion) porsi = \(currency) \(Int(split.customAmount))")
+                            AppLog.debug("   👤 \(split.name): \(split.portion) porsi = \(currency) \(Int(split.customAmount))")
                         }
                     }
-                    print("✅ [CreateSplitBillView] Custom splits saved for \(item.name)")
+                    AppLog.debug("✅ [CreateSplitBillView] Custom splits saved for \(item.name)")
                 }
             }
         )

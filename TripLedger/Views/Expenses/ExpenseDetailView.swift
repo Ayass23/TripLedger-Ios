@@ -274,7 +274,7 @@ struct ExpenseDetailView: View {
                 }
             } else {
                 await MainActor.run {
-                    print("❌ Failed to generate PDF")
+                    AppLog.debug("❌ Failed to generate PDF")
                     isGeneratingPDF = false
                 }
             }
@@ -284,7 +284,7 @@ struct ExpenseDetailView: View {
     // MARK: - Download Image Async
     private func downloadImage(from urlString: String) async -> UIImage? {
         guard let url = URL(string: urlString) else {
-            print("❌ Invalid URL: \(urlString)")
+            AppLog.debug("❌ Invalid URL: \(urlString)")
             return nil
         }
 
@@ -292,7 +292,7 @@ struct ExpenseDetailView: View {
             let (data, _) = try await URLSession.shared.data(from: url)
             return UIImage(data: data)
         } catch {
-            print("❌ Failed to download image: \(error.localizedDescription)")
+            AppLog.debug("❌ Failed to download image: \(error.localizedDescription)")
             return nil
         }
     }

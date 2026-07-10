@@ -285,7 +285,7 @@ struct ReceiptProcessingPage: View {
 
         Task {
             do {
-                print("🔄 [ReceiptProcessingPage] Processing receipt image...")
+                AppLog.debug("🔄 [ReceiptProcessingPage] Processing receipt image...")
 
                 // Perform OCR and AI parsing; phases drive the step checklist
                 let result = try await OCRService.shared.recognizeAndParseReceipt(in: selectedImage) { phase in
@@ -309,7 +309,7 @@ struct ReceiptProcessingPage: View {
                     throw AppError.unknown("Total tagihan tidak ditemukan. Pastikan foto struk menampilkan total pembayaran dengan jelas.")
                 }
 
-                print("✅ [ReceiptProcessingPage] Receipt validated successfully")
+                AppLog.debug("✅ [ReceiptProcessingPage] Receipt validated successfully")
 
                 // Briefly show the last step, then all steps completed,
                 // so the checklist reads as finished before navigating away
@@ -334,7 +334,7 @@ struct ReceiptProcessingPage: View {
                 }
 
             } catch {
-                print("❌ [ReceiptProcessingPage] Receipt processing failed: \(error.localizedDescription)")
+                AppLog.debug("❌ [ReceiptProcessingPage] Receipt processing failed: \(error.localizedDescription)")
 
                 await MainActor.run {
                     UINotificationFeedbackGenerator().notificationOccurred(.error)

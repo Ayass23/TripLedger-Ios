@@ -118,7 +118,7 @@ struct SplitBillModel: Identifiable, Codable, Equatable {
         // Backward compatibility: Auto-populate participantUIDs if missing
         if let uids = try? container.decode([String].self, forKey: .participantUIDs) {
             participantUIDs = uids
-            print("✅ [SplitBillModel] Decoded '\(title)' with \(uids.count) participantUIDs from Firestore")
+            AppLog.debug("✅ [SplitBillModel] Decoded '\(title)' with \(uids.count) participantUIDs from Firestore")
         } else {
             // Generate from participants
             var uids = participants.compactMap { $0.uid }
@@ -126,8 +126,8 @@ struct SplitBillModel: Identifiable, Codable, Equatable {
                 uids.append(ownerUID)
             }
             participantUIDs = uids
-            print("⚠️ [SplitBillModel] Backward compatibility: Auto-populated \(uids.count) participantUIDs for bill '\(title)'")
-            print("   Generated UIDs: \(uids)")
+            AppLog.debug("⚠️ [SplitBillModel] Backward compatibility: Auto-populated \(uids.count) participantUIDs for bill '\(title)'")
+            AppLog.debug("   Generated UIDs: \(uids)")
         }
     }
 

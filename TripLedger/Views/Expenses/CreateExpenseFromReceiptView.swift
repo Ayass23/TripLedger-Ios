@@ -176,21 +176,21 @@ struct CreateExpenseFromReceiptView: View {
             .toolbar(.hidden, for: .tabBar)
         }
         .onAppear {
-            print("\n📋 [CreateExpenseFromReceiptView] Initializing form...")
-            print("   📸 Received receiptImage: \(receiptImage != nil)")
-            print("   🔍 Received scannedResult: \(scannedResult != nil)")
+            AppLog.debug("\n📋 [CreateExpenseFromReceiptView] Initializing form...")
+            AppLog.debug("   📸 Received receiptImage: \(receiptImage != nil)")
+            AppLog.debug("   🔍 Received scannedResult: \(scannedResult != nil)")
 
             // Auto-fill from AI-parsed receipt data
             if let result = scannedResult, let parsed = result.parsedReceipt {
-                print("✨ [CreateExpenseFromReceiptView] Auto-filling from AI-parsed data:")
+                AppLog.debug("✨ [CreateExpenseFromReceiptView] Auto-filling from AI-parsed data:")
 
                 // Fill expense name
                 title = parsed.billName
-                print("   📝 Title: \(parsed.billName)")
+                AppLog.debug("   📝 Title: \(parsed.billName)")
 
                 // Fill total amount
                 amountStr = String(Int(parsed.totalAmount))
-                print("   💰 Amount: \(parsed.currency) \(parsed.totalAmount)")
+                AppLog.debug("   💰 Amount: \(parsed.currency) \(parsed.totalAmount)")
 
                 // Fill currency
                 currency = parsed.currency
@@ -199,35 +199,35 @@ struct CreateExpenseFromReceiptView: View {
                 if let cat = parsed.category {
                     if let expenseCategory = ExpenseCategory.fromString(cat) {
                         category = expenseCategory
-                        print("   🏷️  Category: \(cat) → \(expenseCategory.displayName)")
+                        AppLog.debug("   🏷️  Category: \(cat) → \(expenseCategory.displayName)")
                     } else {
-                        print("   ⚠️ Category '\(cat)' not mapped, using default")
+                        AppLog.debug("   ⚠️ Category '\(cat)' not mapped, using default")
                     }
                 }
 
                 // Fill date if available
                 if let dateStr = parsed.date, let date = parseDate(dateStr) {
                     transactionDate = date
-                    print("   📅 Date: \(dateStr)")
+                    AppLog.debug("   📅 Date: \(dateStr)")
                 }
 
                 // Fill additional charges
                 if let tax = parsed.taxAmount, tax > 0 {
                     taxAmountStr = String(Int(tax))
-                    print("   🧾 Tax: \(tax)")
+                    AppLog.debug("   🧾 Tax: \(tax)")
                 }
                 if let service = parsed.serviceCharge, service > 0 {
                     serviceChargeStr = String(Int(service))
-                    print("   🔔 Service Charge: \(service)")
+                    AppLog.debug("   🔔 Service Charge: \(service)")
                 }
                 if let disc = parsed.discount, disc > 0 {
                     discountStr = String(Int(disc))
-                    print("   🎫 Discount: \(disc)")
+                    AppLog.debug("   🎫 Discount: \(disc)")
                 }
                 if let round = parsed.rounding {
                     // Rounding can be negative
                     roundingStr = String(Int(round))
-                    print("   🔄 Rounding: \(round)")
+                    AppLog.debug("   🔄 Rounding: \(round)")
                 }
 
                 // Fill items for Step 3 (filter out items without price)
@@ -235,7 +235,7 @@ struct CreateExpenseFromReceiptView: View {
                     items = parsed.items.compactMap { receiptItem in
                         // Skip items without price
                         guard let price = receiptItem.price, price > 0 else {
-                            print("   ⚠️ Skipping item '\(receiptItem.name)' - no price")
+                            AppLog.debug("   ⚠️ Skipping item '\(receiptItem.name)' - no price")
                             return nil
                         }
                         return ItemEntry(
@@ -244,34 +244,34 @@ struct CreateExpenseFromReceiptView: View {
                             quantity: receiptItem.quantity ?? 1
                         )
                     }
-                    print("   📦 Items: \(items.count) items loaded (filtered from \(parsed.items.count))")
+                    AppLog.debug("   📦 Items: \(items.count) items loaded (filtered from \(parsed.items.count))")
                 } else {
                     // If no items, create a single "Total" item
                     items = [ItemEntry(name: "Total Pengeluaran", price: parsed.totalAmount, quantity: 1)]
-                    print("   ⚠️ No items found, using total as single item")
+                    AppLog.debug("   ⚠️ No items found, using total as single item")
                 }
 
-                print("✅ [CreateExpenseFromReceiptView] Auto-fill completed from AI data")
+                AppLog.debug("✅ [CreateExpenseFromReceiptView] Auto-fill completed from AI data")
             } else if let result = scannedResult, let parsed = result.parsedAmount {
                 // Fallback to basic OCR parsing
                 amountStr = String(Int(parsed))
-                print("⚠️ [CreateExpenseFromReceiptView] Using basic OCR parsing (amount only): \(parsed)")
+                AppLog.debug("⚠️ [CreateExpenseFromReceiptView] Using basic OCR parsing (amount only): \(parsed)")
 
                 // Create single item for manual split
                 if totalAmount > 0 {
                     items = [ItemEntry(name: "Total Pengeluaran", price: totalAmount, quantity: 1)]
                 }
             } else {
-                print("ℹ️ [CreateExpenseFromReceiptView] No scanned data")
+                AppLog.debug("ℹ️ [CreateExpenseFromReceiptView] No scanned data")
             }
 
             // Ensure items exist
             if items.isEmpty && totalAmount > 0 {
                 items = [ItemEntry(name: "Total Pengeluaran", price: totalAmount)]
-                print("   📦 Created default item for manual split")
+                AppLog.debug("   📦 Created default item for manual split")
             }
 
-            print("📋 [CreateExpenseFromReceiptView] Form initialized\n")
+            AppLog.debug("📋 [CreateExpenseFromReceiptView] Form initialized\n")
         }
         .task {
             // Load suspended member UIDs first, then init participants
@@ -405,10 +405,10 @@ struct CreateExpenseFromReceiptView: View {
     func saveExpense() async {
         guard let user = authVM.currentUser else { return }
 
-        print("💾 [CreateExpenseFromReceiptView] Saving expense...")
-        print("   📝 Title: \(title)")
-        print("   💰 Amount: \(currency) \(calculatedTotal)")
-        print("   📸 receiptImage available: \(receiptImage != nil)")
+        AppLog.debug("💾 [CreateExpenseFromReceiptView] Saving expense...")
+        AppLog.debug("   📝 Title: \(title)")
+        AppLog.debug("   💰 Amount: \(currency) \(calculatedTotal)")
+        AppLog.debug("   📸 receiptImage available: \(receiptImage != nil)")
 
         // Build splits based on item selections
         let finalSplits: [ExpenseSplit] = activeParticipants.compactMap { p in
@@ -443,7 +443,7 @@ struct CreateExpenseFromReceiptView: View {
             // Payer's split is automatically marked as paid (they paid for everyone)
             let isPayerSplit = p.uid == paidByParticipant?.uid
 
-            print("   👤 \(p.name): \(currency) \(splitAmount) - \(participantItems.count) items - isPaid: \(isPayerSplit)")
+            AppLog.debug("   👤 \(p.name): \(currency) \(splitAmount) - \(participantItems.count) items - isPaid: \(isPayerSplit)")
             return ExpenseSplit(
                 id: p.id,
                 uid: p.uid,
@@ -501,7 +501,7 @@ struct CreateExpenseFromReceiptView: View {
             transactionDate: transactionDate
         )
 
-        print("✅ [CreateExpenseFromReceiptView] Expense saved successfully!")
+        AppLog.debug("✅ [CreateExpenseFromReceiptView] Expense saved successfully!")
         showSuccessAlert = true
     }
 
@@ -536,7 +536,7 @@ struct CreateExpenseFromReceiptView: View {
         do {
             suspendedMemberUIDs = try await FirestoreService.shared.fetchSuspendedMemberUIDs(memberUIDs: memberUIDs)
         } catch {
-            print("Error loading suspended members: \(error)")
+            AppLog.debug("Error loading suspended members: \(error)")
         }
     }
 
@@ -565,6 +565,6 @@ struct CreateExpenseFromReceiptView: View {
             paidByParticipant = participants.first(where: { !suspendedMemberUIDs.contains($0.uid) })
         }
 
-        print("👥 [CreateExpenseFromReceiptView] Loaded \(participants.count) participants from trip")
+        AppLog.debug("👥 [CreateExpenseFromReceiptView] Loaded \(participants.count) participants from trip")
     }
 }

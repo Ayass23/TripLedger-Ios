@@ -111,7 +111,7 @@ struct ProfileView: View {
                         if let uid = authVM.currentUser?.uid {
                             await profileVM.uploadAvatar(croppedImg, uid: uid)
                             await authVM.refreshUser()
-                            print("🔄 [ProfileView] User refreshed - New avatar URL: \(authVM.currentUser?.avatarURL ?? "nil")")
+                            AppLog.debug("🔄 [ProfileView] User refreshed - New avatar URL: \(authVM.currentUser?.avatarURL ?? "nil")")
                         }
                         isUploadingAvatar = false
                     }
@@ -135,13 +135,13 @@ struct ProfileView: View {
         }
         // Debug: onChange untuk track selectedImage
         .onChange(of: selectedImage) { newValue in
-            print("📸 [ProfileView] selectedImage changed: \(newValue != nil)")
+            AppLog.debug("📸 [ProfileView] selectedImage changed: \(newValue != nil)")
             if newValue != nil {
-                print("   Image size: \(newValue!.size)")
+                AppLog.debug("   Image size: \(newValue!.size)")
             }
         }
         .onChange(of: showImageCropper) { newValue in
-            print("✂️ [ProfileView] showImageCropper: \(newValue)")
+            AppLog.debug("✂️ [ProfileView] showImageCropper: \(newValue)")
         }
         // Alert for errors
         .alert("Error", isPresented: .constant(profileVM.errorMessage != nil)) {

@@ -30,11 +30,11 @@ final class TripViewModel: ObservableObject {
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
                 if let error = error {
-                    print("❌ [TripVM] listenTrips error")
-                    print("   Error Code: \((error as NSError).code)")
-                    print("   Error Domain: \((error as NSError).domain)")
-                    print("   Description: \(error.localizedDescription)")
-                    print("   Full Error: \(error)")
+                    AppLog.debug("❌ [TripVM] listenTrips error")
+                    AppLog.debug("   Error Code: \((error as NSError).code)")
+                    AppLog.debug("   Error Domain: \((error as NSError).domain)")
+                    AppLog.debug("   Description: \(error.localizedDescription)")
+                    AppLog.debug("   Full Error: \(error)")
                     self?.errorMessage = error.localizedDescription
                     return
                 }
@@ -323,7 +323,7 @@ final class TripViewModel: ObservableObject {
             // Fetch current trip data
             let doc = try await db.db.collection(Collection.trips).document(tripID).getDocument()
             guard var trip = try? doc.data(as: TripModel.self) else {
-                print("❌ [TripVM] Failed to fetch trip for ownership transfer")
+                AppLog.debug("❌ [TripVM] Failed to fetch trip for ownership transfer")
                 return
             }
 
@@ -398,10 +398,10 @@ final class TripViewModel: ObservableObject {
             )
             try await db.db.collection(Collection.notifications).addDocument(from: notification)
 
-            print("✅ [TripVM] Ownership transferred from \(oldOwnerUID) to \(newOwnerUID)")
+            AppLog.debug("✅ [TripVM] Ownership transferred from \(oldOwnerUID) to \(newOwnerUID)")
         } catch {
             errorMessage = error.localizedDescription
-            print("❌ [TripVM] Error transferring ownership: \(error)")
+            AppLog.debug("❌ [TripVM] Error transferring ownership: \(error)")
         }
     }
 
@@ -439,9 +439,9 @@ final class TripViewModel: ObservableObject {
             }
 
             try await db.db.collection(Collection.trips).document(tripID).updateData(fieldsToUpdate)
-            print("✅ [TripVM] Trip updated successfully")
+            AppLog.debug("✅ [TripVM] Trip updated successfully")
         } catch {
-            print("❌ [TripVM] Error updating trip: \(error)")
+            AppLog.debug("❌ [TripVM] Error updating trip: \(error)")
             errorMessage = "Gagal memperbarui trip. Pastikan kamu adalah owner trip ini."
         }
     }

@@ -53,19 +53,19 @@ final class OCRService {
         format.scale = 1
         let prepared = UIGraphicsImageRenderer(size: newSize, format: format)
             .image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
-        print("   ✓ Prepared image: orientation \(image.imageOrientation.rawValue) → up, \(Int(size.width))x\(Int(size.height)) → \(Int(newSize.width))x\(Int(newSize.height))")
+        AppLog.debug("   ✓ Prepared image: orientation \(image.imageOrientation.rawValue) → up, \(Int(size.width))x\(Int(size.height)) → \(Int(newSize.width))x\(Int(newSize.height))")
         return prepared
     }
 
     // MARK: - Preprocess Image for Better OCR
     private func preprocessImage(_ image: UIImage) -> UIImage {
-        print("🔧 [OCRService] Preprocessing image...")
+        AppLog.debug("🔧 [OCRService] Preprocessing image...")
 
         // 1. Normalize orientation and resolution (consistent for camera & gallery)
         let preparedImage = prepareImageForOCR(image)
 
         guard let ciImage = CIImage(image: preparedImage) else {
-            print("   ⚠️ Could not create CIImage, using original")
+            AppLog.debug("   ⚠️ Could not create CIImage, using original")
             return preparedImage
         }
 
@@ -81,7 +81,7 @@ final class OCRService {
             grayscaleFilter.setValue(processedImage, forKey: kCIInputImageKey)
             if let output = grayscaleFilter.outputImage {
                 processedImage = output
-                print("   ✓ Applied grayscale filter")
+                AppLog.debug("   ✓ Applied grayscale filter")
             }
         }
 
@@ -93,7 +93,7 @@ final class OCRService {
             contrastFilter.setValue(0.05, forKey: kCIInputBrightnessKey)  // Slight brightness boost
             if let output = contrastFilter.outputImage {
                 processedImage = output
-                print("   ✓ Applied contrast enhancement")
+                AppLog.debug("   ✓ Applied contrast enhancement")
             }
         }
 
@@ -103,17 +103,17 @@ final class OCRService {
             sharpenFilter.setValue(0.4, forKey: kCIInputSharpnessKey)  // Moderate sharpening
             if let output = sharpenFilter.outputImage {
                 processedImage = output
-                print("   ✓ Applied sharpening")
+                AppLog.debug("   ✓ Applied sharpening")
             }
         }
 
         // Convert back to UIImage
         if let cgImage = context.createCGImage(processedImage, from: processedImage.extent) {
-            print("   ✅ Preprocessing completed")
+            AppLog.debug("   ✅ Preprocessing completed")
             return UIImage(cgImage: cgImage)
         }
 
-        print("   ⚠️ Could not create final image, using prepared original")
+        AppLog.debug("   ⚠️ Could not create final image, using prepared original")
         return preparedImage
     }
 
@@ -128,7 +128,7 @@ final class OCRService {
         guard (try? handler.perform([request])) != nil,
               let observation = request.results?.first,
               observation.confidence > 0.8 else {
-            print("   ℹ️ No confident document quad, skipping perspective correction")
+            AppLog.debug("   ℹ️ No confident document quad, skipping perspective correction")
             return ciImage
         }
 
@@ -144,7 +144,7 @@ final class OCRService {
         }
         area = abs(area) / 2
         guard area > 0.1 else {
-            print("   ℹ️ Document quad too small (\(area)), skipping perspective correction")
+            AppLog.debug("   ℹ️ Document quad too small (\(area)), skipping perspective correction")
             return ciImage
         }
 
@@ -161,7 +161,7 @@ final class OCRService {
             "inputBottomLeft": CIVector(cgPoint: denormalize(observation.bottomLeft)),
             "inputBottomRight": CIVector(cgPoint: denormalize(observation.bottomRight))
         ])
-        print("   ✓ Applied perspective correction (quad area \(Int(area * 100))% of image)")
+        AppLog.debug("   ✓ Applied perspective correction (quad area \(Int(area * 100))% of image)")
         return corrected
     }
 
@@ -187,7 +187,7 @@ final class OCRService {
             let usable = preferredLanguages.filter { supported.contains($0) }
             request.recognitionLanguages = usable.isEmpty ? ["en-US"] : usable
             if usable.count < preferredLanguages.count {
-                print("   ℹ️ OCR languages narrowed to \(request.recognitionLanguages) (device support)")
+                AppLog.debug("   ℹ️ OCR languages narrowed to \(request.recognitionLanguages) (device support)")
             }
         } else {
             request.recognitionLanguages = preferredLanguages
@@ -328,36 +328,36 @@ final class OCRService {
 
     // MARK: - Recognize and Parse Receipt (OCR + AI)
     func recognizeAndParseReceipt(in image: UIImage, onPhase: ((ScanPhase) -> Void)? = nil) async throws -> OCRResult {
-        print("\n🚀 ========== STARTING RECEIPT SCAN ==========")
-        print("📸 [OCRService] Image size: \(image.size.width) x \(image.size.height)")
+        AppLog.debug("\n🚀 ========== STARTING RECEIPT SCAN ==========")
+        AppLog.debug("📸 [OCRService] Image size: \(image.size.width) x \(image.size.height)")
 
         // Step 1: Perform OCR
-        print("👁️ [OCRService] Step 1: Running OCR text recognition...")
+        AppLog.debug("👁️ [OCRService] Step 1: Running OCR text recognition...")
         onPhase?(.ocr)
         var result = try await recognizeText(in: image)
 
-        print("✅ [OCRService] OCR completed - Found \(result.lines.count) lines")
+        AppLog.debug("✅ [OCRService] OCR completed - Found \(result.lines.count) lines")
 
         // Step 2: Parse with AI
         guard !result.fullText.isEmpty else {
-            print("❌ [OCRService] Error: No text detected in image")
+            AppLog.debug("❌ [OCRService] Error: No text detected in image")
             throw AppError.unknown("No text detected in image.")
         }
 
-        print("🤖 [OCRService] Step 2: Sending to AI parser...")
+        AppLog.debug("🤖 [OCRService] Step 2: Sending to AI parser...")
         onPhase?(.ai)
         do {
             let parsedReceipt = try await AIService.shared.parseReceipt(from: result.fullText, image: image)
             result.parsedReceipt = parsedReceipt
-            print("✅ [OCRService] AI parsing successful")
+            AppLog.debug("✅ [OCRService] AI parsing successful")
         } catch {
             // If AI parsing fails, continue with OCR result only
-            print("⚠️ [OCRService] AI parsing failed: \(error.localizedDescription)")
-            print("   Using OCR result only (parsedReceipt will be nil)")
+            AppLog.debug("⚠️ [OCRService] AI parsing failed: \(error.localizedDescription)")
+            AppLog.debug("   Using OCR result only (parsedReceipt will be nil)")
             // parsedReceipt will remain nil
         }
 
-        print("🏁 ========== RECEIPT SCAN COMPLETED ==========\n")
+        AppLog.debug("🏁 ========== RECEIPT SCAN COMPLETED ==========\n")
         return result
     }
 }

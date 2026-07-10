@@ -14,7 +14,7 @@ extension TripDetailView {
         guard let reportType = selectedReportType,
               let currentUserUID = authVM.currentUser?.uid,
               let currentUserName = authVM.currentUser?.displayName else {
-            print("❌ Missing data for report generation")
+            AppLog.debug("❌ Missing data for report generation")
             return
         }
 
@@ -44,9 +44,9 @@ extension TripDetailView {
             reportPDFURL = url
             reportTitle = title
             showReportPreview = true
-            print("✅ Report PDF generated: \(url.lastPathComponent)")
+            AppLog.debug("✅ Report PDF generated: \(url.lastPathComponent)")
         } else {
-            print("❌ Failed to generate report PDF")
+            AppLog.debug("❌ Failed to generate report PDF")
         }
     }
 }

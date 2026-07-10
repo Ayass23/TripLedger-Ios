@@ -104,7 +104,7 @@ final class ExpenseViewModel: ObservableObject {
                     finalTripName = trip.name
                 }
             } catch {
-                print("⚠️ [ExpenseVM] Could not fetch trip name: \(error)")
+                AppLog.debug("⚠️ [ExpenseVM] Could not fetch trip name: \(error)")
             }
         }
 
@@ -124,9 +124,9 @@ final class ExpenseViewModel: ObservableObject {
 
             do {
                 try await db.db.collection(Collection.notifications).addDocument(from: notification)
-                print("✅ [ExpenseVM] Notification sent to \(split.displayName)")
+                AppLog.debug("✅ [ExpenseVM] Notification sent to \(split.displayName)")
             } catch {
-                print("⚠️ [ExpenseVM] Failed to send notification to \(split.displayName): \(error)")
+                AppLog.debug("⚠️ [ExpenseVM] Failed to send notification to \(split.displayName): \(error)")
             }
         }
     }
