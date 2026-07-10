@@ -1,3 +1,7 @@
+//  CreateExpenseFromReceiptView.swift
+//  Wizard 3 langkah membuat pengeluaran dari hasil scan struk (tanpa mode bagi rata).
+//  Form terisi otomatis dari ParsedReceiptModel. Companion: +Steps, +Sheets.
+//
 import SwiftUI
 import FirebaseFirestore
 

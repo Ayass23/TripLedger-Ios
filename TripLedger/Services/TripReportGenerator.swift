@@ -1,3 +1,7 @@
+//  TripReportGenerator.swift
+//  Membangun PDF laporan trip: ringkasan trip (semua pengeluaran + saldo tiap anggota)
+//  dan laporan pengeluaran pribadi. Perhitungan saldo mengikuti status isPaid tiap split.
+//
 import Foundation
 import PDFKit
 import UIKit

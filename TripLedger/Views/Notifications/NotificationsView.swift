@@ -1,3 +1,6 @@
+//  NotificationsView.swift
+//  Daftar notifikasi: undangan trip, permintaan pertemanan, dan info settlement.
+//
 import SwiftUI
 import FirebaseCore
 

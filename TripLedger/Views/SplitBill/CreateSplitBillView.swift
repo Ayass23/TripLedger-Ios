@@ -1,3 +1,9 @@
+//  CreateSplitBillView.swift
+//  Wizard 3 langkah membuat split bill: (1) info & scan struk, (2) pilih peserta,
+//  (3) pembagian - mode Bagi Rata atau Input Manual per item.
+//  Bagian besar dipecah ke companion: +Steps, +BagiRata, +InputManual, +Sheets.
+//  Rumus pembagian uang ada di BillSplitCalculator - jangan diduplikasi di sini.
+//
 import SwiftUI
 import UIKit
 import FirebaseFirestore

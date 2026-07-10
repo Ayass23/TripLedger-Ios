@@ -1,3 +1,6 @@
+//  PDFGenerator.swift
+//  Membangun PDF detail split bill tunggal (item per peserta, pajak/service/diskon).
+//
 import Foundation
 import PDFKit
 import UIKit

@@ -1,3 +1,8 @@
+//  AIService.swift
+//  Parsing teks OCR struk (format Indonesia) menjadi ParsedReceiptModel via OpenAI.
+//  Foto struk ikut dikirim ke model multimodal sebagai sumber kebenaran urutan item.
+//  API key dibaca dari Secrets.xcconfig melalui Info.plist - jangan hardcode di sini.
+//
 import Foundation
 import UIKit
 

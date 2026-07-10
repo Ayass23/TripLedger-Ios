@@ -1,3 +1,6 @@
+//  SplitBillDetailView.swift
+//  Detail split bill: rincian item per peserta, status pembayaran, dan ekspor PDF.
+//
 import SwiftUI
 import Kingfisher
 

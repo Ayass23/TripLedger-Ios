@@ -1,3 +1,7 @@
+//  FirestoreService.swift
+//  CRUD generik Firestore (set/update/delete/fetch/listen) + query khusus.
+//  Semua akses Firestore dari View harus lewat service ini atau ViewModel.
+//
 import Foundation
 import FirebaseFirestore
 

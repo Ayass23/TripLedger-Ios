@@ -1,3 +1,7 @@
+//  OCRService.swift
+//  OCR struk dengan Vision framework. Pipeline: normalisasi orientasi/resolusi,
+//  koreksi perspektif, grayscale, lalu text recognition + rekonstruksi baris.
+//
 import Foundation
 import Vision
 import UIKit

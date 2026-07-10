@@ -1,3 +1,6 @@
+//  HomeView.swift
+//  Beranda: daftar trip aktif, tagihan split bill pending, dan ringkasan utang per trip.
+//
 import SwiftUI
 import FirebaseFirestore
 import FirebaseCore

@@ -1,3 +1,8 @@
+//  AdminDashboardView.swift
+//  Dasbor admin: statistik, kelola pengguna (suspend/aktifkan), laporan, dan banding akun.
+//  Komponen kartu/sheet ada di file terpisah: AppealCard, AppealDetailSheet, UserManagementCard,
+//  ReportCard, ReportDetailSheet, AdminSharedViews.
+//
 import SwiftUI
 import FirebaseFirestore
 

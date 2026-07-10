@@ -1,3 +1,7 @@
+//  AddExpenseView.swift
+//  Wizard 3 langkah menambah pengeluaran manual: info, peserta, pembagian (bagi rata / per item).
+//  Companion: +Steps, +BagiRata, +InputManual, +Sheets. Rumus uang di BillSplitCalculator.
+//
 import SwiftUI
 import UIKit
 import FirebaseCore

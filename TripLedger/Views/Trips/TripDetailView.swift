@@ -1,3 +1,8 @@
+//  TripDetailView.swift
+//  Halaman detail trip: tab Detail (info, anggota, settlement) dan tab Pengeluaran.
+//  Companion: TripDetailRows.swift, TransferOwnerSheet.swift, TripDetailView+Report.swift,
+//  TripDetailModifiers.swift (alert & navigation destination).
+//
 import SwiftUI
 import FirebaseCore
 import FirebaseFirestore
