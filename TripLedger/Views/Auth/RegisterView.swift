@@ -188,13 +188,13 @@ struct RegisterView: View {
                     .padding(.vertical, 16)
                     .background(
                         LinearGradient(
-                            colors: [Color(hex: "#8E6BFF"), Color(hex: "#A58CF4")],
+                            colors: [Color.authViolet, Color.brandAccent],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.full, style: .continuous))
-                    .shadow(color: Color(hex: "#8E6BFF").opacity(0.45), radius: 12, y: 4)
+                    .shadow(color: Color.authViolet.opacity(0.45), radius: 12, y: 4)
                 }
                 .disabled(authVM.isLoading)
                 .padding(.top, 28)
@@ -207,7 +207,7 @@ struct RegisterView: View {
         .background(
             ZStack {
                 LinearGradient(
-                    colors: [Color(hex: "#433075"), Color(hex: "#2A1D50"), Color(hex: "#1A1040")],
+                    colors: [Color.brandPrimary, Color.authDeepPurple, Color.authMidnight],
                     startPoint: .top, endPoint: .bottom
                 )
                 .ignoresSafeArea()
@@ -216,7 +216,7 @@ struct RegisterView: View {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color(hex: "#A58CF4").opacity(0.4), Color.clear],
+                            colors: [Color.brandAccent.opacity(0.4), Color.clear],
                             center: .center,
                             startRadius: 20,
                             endRadius: 180
@@ -229,7 +229,7 @@ struct RegisterView: View {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color(hex: "#8E6BFF").opacity(0.3), Color.clear],
+                            colors: [Color.authViolet.opacity(0.3), Color.clear],
                             center: .center,
                             startRadius: 10,
                             endRadius: 150

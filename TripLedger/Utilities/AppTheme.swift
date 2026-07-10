@@ -32,6 +32,19 @@ extension Color {
     static let accentFallback  = Color.hex("#A58CF4")
     static let cardFallback    = Color.white
     static let baseFallback    = Color.hex("#FAFAFA")
+
+    // Extended palette — shades used by the Admin dashboard and Auth screens.
+    // Values are unchanged from the previous hardcoded literals; they only
+    // received names here so screens stop bypassing the theme.
+    static let adminPurple        = Color.hex("#7C3AED")
+    static let adminPurpleDark    = Color.hex("#5B21B6")
+    static let successEmerald     = Color.hex("#10B981")
+    static let successEmeraldDark = Color.hex("#059669")
+    static let dangerRed          = Color.hex("#EF4444")
+    static let infoBlue           = Color.hex("#3B82F6")
+    static let authViolet         = Color.hex("#8E6BFF")
+    static let authDeepPurple     = Color.hex("#2A1D50")
+    static let authMidnight       = Color.hex("#1A1040")
 }
 
 // MARK: - Hex Support

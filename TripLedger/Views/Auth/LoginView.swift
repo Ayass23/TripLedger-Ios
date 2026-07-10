@@ -59,7 +59,7 @@ struct LoginView: View {
                         Button { showForgot = true } label: {
                             Text("Lupa password?")
                                 .font(AppFont.footnote())
-                                .foregroundColor(Color(hex: "#A58CF4"))
+                                .foregroundColor(Color.brandAccent)
                         }
                     }
                 }
@@ -91,13 +91,13 @@ struct LoginView: View {
                     .padding(.vertical, 16)
                     .background(
                         LinearGradient(
-                            colors: [Color(hex: "#8E6BFF"), Color(hex: "#A58CF4")],
+                            colors: [Color.authViolet, Color.brandAccent],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.full, style: .continuous))
-                    .shadow(color: Color(hex: "#8E6BFF").opacity(0.45), radius: 12, y: 4)
+                    .shadow(color: Color.authViolet.opacity(0.45), radius: 12, y: 4)
                 }
                 .disabled(authVM.isLoading || email.isBlank || password.count < 6)
                 .opacity((email.isBlank || password.count < 6) ? 0.5 : 1)
@@ -111,7 +111,7 @@ struct LoginView: View {
         .background(
             ZStack {
                 LinearGradient(
-                    colors: [Color(hex: "#433075"), Color(hex: "#2A1D50"), Color(hex: "#1A1040")],
+                    colors: [Color.brandPrimary, Color.authDeepPurple, Color.authMidnight],
                     startPoint: .top, endPoint: .bottom
                 )
                 .ignoresSafeArea()
@@ -120,7 +120,7 @@ struct LoginView: View {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color(hex: "#A58CF4").opacity(0.4), Color.clear],
+                            colors: [Color.brandAccent.opacity(0.4), Color.clear],
                             center: .center,
                             startRadius: 20,
                             endRadius: 180
@@ -133,7 +133,7 @@ struct LoginView: View {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color(hex: "#8E6BFF").opacity(0.3), Color.clear],
+                            colors: [Color.authViolet.opacity(0.3), Color.clear],
                             center: .center,
                             startRadius: 10,
                             endRadius: 150
@@ -190,11 +190,11 @@ struct LoginView: View {
                     // Icon
                     ZStack {
                         Circle()
-                            .fill(Color(hex: "#8E6BFF").opacity(0.15))
+                            .fill(Color.authViolet.opacity(0.15))
                             .frame(width: 64, height: 64)
                         Image(systemName: "lock.rotation")
                             .font(.system(size: 28))
-                            .foregroundColor(Color(hex: "#A58CF4"))
+                            .foregroundColor(Color.brandAccent)
                     }
 
                     VStack(spacing: 6) {
@@ -241,7 +241,7 @@ struct LoginView: View {
                         .padding(.vertical, 14)
                         .background(
                             LinearGradient(
-                                colors: [Color(hex: "#8E6BFF"), Color(hex: "#A58CF4")],
+                                colors: [Color.authViolet, Color.brandAccent],
                                 startPoint: .leading, endPoint: .trailing
                             )
                         )
@@ -275,7 +275,7 @@ struct LoginView: View {
                         Text(forgotEmail)
                             .font(AppFont.subheadline())
                             .fontWeight(.semibold)
-                            .foregroundColor(Color(hex: "#A58CF4"))
+                            .foregroundColor(Color.brandAccent)
                     }
 
                     // Spam notice
@@ -334,13 +334,13 @@ struct LoginView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "lightbulb.fill")
                             .font(.system(size: 14))
-                            .foregroundColor(Color(hex: "#A58CF4"))
+                            .foregroundColor(Color.brandAccent)
                         Text("Pastikan email yang kamu masukkan sudah benar, atau daftar akun baru.")
                             .font(AppFont.footnote())
                             .foregroundColor(.white.opacity(0.7))
                     }
                     .padding(12)
-                    .background(Color(hex: "#8E6BFF").opacity(0.12))
+                    .background(Color.authViolet.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     // Try again
@@ -354,7 +354,7 @@ struct LoginView: View {
                             .padding(.vertical, 14)
                             .background(
                                 LinearGradient(
-                                    colors: [Color(hex: "#8E6BFF"), Color(hex: "#A58CF4")],
+                                    colors: [Color.authViolet, Color.brandAccent],
                                     startPoint: .leading, endPoint: .trailing
                                 )
                             )
@@ -377,7 +377,7 @@ struct LoginView: View {
             Spacer()
         }
         .padding(.bottom, 24)
-        .background(Color(hex: "#2A1D50"))
+        .background(Color.authDeepPurple)
         .presentationDetents([.height(420)])
         .preferredColorScheme(.dark)
         .onAppear {

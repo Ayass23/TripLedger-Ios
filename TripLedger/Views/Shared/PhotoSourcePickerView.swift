@@ -109,12 +109,12 @@ struct PhotoSourcePickerView: View {
                     HStack(spacing: 14) {
                         ZStack {
                             Circle()
-                                .fill(Color(hex: "#10B981").opacity(0.15))
+                                .fill(Color.successEmerald.opacity(0.15))
                                 .frame(width: 48, height: 48)
 
                             Image(systemName: "photo.on.rectangle")
                                 .font(.system(size: 20))
-                                .foregroundColor(Color(hex: "#10B981"))
+                                .foregroundColor(Color.successEmerald)
                         }
 
                         VStack(alignment: .leading, spacing: 3) {
@@ -139,7 +139,7 @@ struct PhotoSourcePickerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                     .overlay(
                         RoundedRectangle(cornerRadius: AppRadius.md)
-                            .stroke(Color(hex: "#10B981").opacity(0.1), lineWidth: 1)
+                            .stroke(Color.successEmerald.opacity(0.1), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)

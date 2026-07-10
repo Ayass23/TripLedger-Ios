@@ -11,7 +11,7 @@ struct WelcomeView: View {
             ZStack {
             // Deep purple background
             LinearGradient(
-                colors: [Color(hex: "#433075"), Color(hex: "#2A1D50"), Color(hex: "#1A1040")],
+                colors: [Color.brandPrimary, Color.authDeepPurple, Color.authMidnight],
                 startPoint: .top, endPoint: .bottom
             )
             .ignoresSafeArea()
@@ -20,7 +20,7 @@ struct WelcomeView: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "#A58CF4").opacity(0.4), Color.clear],
+                        colors: [Color.brandAccent.opacity(0.4), Color.clear],
                         center: .center,
                         startRadius: 20,
                         endRadius: 180
@@ -33,7 +33,7 @@ struct WelcomeView: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "#8E6BFF").opacity(0.3), Color.clear],
+                        colors: [Color.authViolet.opacity(0.3), Color.clear],
                         center: .center,
                         startRadius: 10,
                         endRadius: 150
@@ -99,13 +99,13 @@ struct WelcomeView: View {
                             .padding(.vertical, 16)
                             .background(
                                 LinearGradient(
-                                    colors: [Color(hex: "#8E6BFF"), Color(hex: "#A58CF4")],
+                                    colors: [Color.authViolet, Color.brandAccent],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.full, style: .continuous))
-                            .shadow(color: Color(hex: "#8E6BFF").opacity(0.5), radius: 16, y: 6)
+                            .shadow(color: Color.authViolet.opacity(0.5), radius: 16, y: 6)
                     }
 
                     NavigationLink(destination: RegisterView().navigationBarBackButtonHidden()) {
@@ -113,7 +113,7 @@ struct WelcomeView: View {
                             Text("Belum punya akun?")
                                 .foregroundColor(.white.opacity(0.6))
                             Text("Daftar Sekarang")
-                                .foregroundColor(Color(hex: "#A58CF4"))
+                                .foregroundColor(Color.brandAccent)
                                 .fontWeight(.semibold)
                         }
                         .font(AppFont.subheadline())

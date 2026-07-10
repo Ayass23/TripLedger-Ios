@@ -33,7 +33,7 @@ struct AdminDashboardView: View {
             }
             .tag(1)
         }
-        .tint(Color(hex: "#7C3AED"))
+        .tint(Color.adminPurple)
         .onAppear {
             adminVM.listenToUsers()
             adminVM.listenToReports()
@@ -136,7 +136,7 @@ struct AdminDashboardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: [Color(hex: "#7C3AED"), Color(hex: "#5B21B6")],
+                colors: [Color.adminPurple, Color.adminPurpleDark],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -151,11 +151,11 @@ struct AdminDashboardView: View {
                 HStack(spacing: 10) {
                     ZStack {
                         Circle()
-                            .fill(Color(hex: "#EF4444").opacity(0.15))
+                            .fill(Color.dangerRed.opacity(0.15))
                             .frame(width: 32, height: 32)
                         Image(systemName: "doc.text.fill")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(hex: "#EF4444"))
+                            .foregroundColor(Color.dangerRed)
                     }
 
                     Text("Laporan Terbaru")
@@ -177,7 +177,7 @@ struct AdminDashboardView: View {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .bold))
                     }
-                    .foregroundColor(Color(hex: "#7C3AED"))
+                    .foregroundColor(Color.adminPurple)
                 }
             }
             .padding(.horizontal, 20)
@@ -198,11 +198,11 @@ struct AdminDashboardView: View {
                 HStack(spacing: 10) {
                     ZStack {
                         Circle()
-                            .fill(Color(hex: "#3B82F6").opacity(0.15))
+                            .fill(Color.infoBlue.opacity(0.15))
                             .frame(width: 32, height: 32)
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(hex: "#3B82F6"))
+                            .foregroundColor(Color.infoBlue)
                     }
 
                     Text("Pengguna Terbaru")
@@ -224,7 +224,7 @@ struct AdminDashboardView: View {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .bold))
                     }
-                    .foregroundColor(Color(hex: "#7C3AED"))
+                    .foregroundColor(Color.adminPurple)
                 }
             }
             .padding(.horizontal, 20)
@@ -247,7 +247,7 @@ struct AdminDashboardView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "#7C3AED"), Color(hex: "#5B21B6")],
+                                colors: [Color.adminPurple, Color.adminPurpleDark],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -285,7 +285,7 @@ struct AdminDashboardView: View {
             .padding(20)
             .background(Color.cardFallback)
             .clipShape(RoundedRectangle(cornerRadius: 20))
-            .shadow(color: Color(hex: "#7C3AED").opacity(0.15), radius: 12, y: 4)
+            .shadow(color: Color.adminPurple.opacity(0.15), radius: 12, y: 4)
 
             // Secondary stats row
             HStack(spacing: 12) {
@@ -294,7 +294,7 @@ struct AdminDashboardView: View {
                     icon: "exclamationmark.triangle.fill",
                     title: "Laporan Pending",
                     value: "\(pendingReportsCount)",
-                    color: Color(hex: "#EF4444"),
+                    color: Color.dangerRed,
                     isUrgent: pendingReportsCount > 0
                 )
 
@@ -303,7 +303,7 @@ struct AdminDashboardView: View {
                     icon: "person.fill.xmark",
                     title: "User Suspend",
                     value: "\(suspendedUsersCount)",
-                    color: Color(hex: "#F59E0B"),
+                    color: Color.warningAmber,
                     isUrgent: false
                 )
 
@@ -312,7 +312,7 @@ struct AdminDashboardView: View {
                     icon: "checkmark.circle.fill",
                     title: "User Aktif",
                     value: "\(adminVM.allUsers.count - suspendedUsersCount)",
-                    color: Color(hex: "#10B981"),
+                    color: Color.successEmerald,
                     isUrgent: false
                 )
             }
@@ -372,7 +372,7 @@ struct AdminDashboardView: View {
                     Text("KELOLA")
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                         .tracking(1.5)
-                        .foregroundColor(Color(hex: "#7C3AED").opacity(0.7))
+                        .foregroundColor(Color.adminPurple.opacity(0.7))
 
                     Text(kelolaSegment == 0 ? "Pengguna" : "Laporan")
                         .font(.system(size: 26, weight: .bold, design: .rounded))
@@ -385,16 +385,16 @@ struct AdminDashboardView: View {
                 if pendingReportsCount > 0 && kelolaSegment == 1 {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(Color(hex: "#EF4444"))
+                            .fill(Color.dangerRed)
                             .frame(width: 8, height: 8)
                         Text("\(pendingReportsCount) pending")
                             .font(AppFont.caption2())
                             .fontWeight(.semibold)
-                            .foregroundColor(Color(hex: "#EF4444"))
+                            .foregroundColor(Color.dangerRed)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color(hex: "#EF4444").opacity(0.1))
+                    .background(Color.dangerRed.opacity(0.1))
                     .clipShape(Capsule())
                 }
             }
@@ -439,7 +439,7 @@ struct AdminDashboardView: View {
                 if kelolaSegment == index {
                     Text("\(count)")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Color(hex: "#7C3AED"))
+                        .foregroundColor(Color.adminPurple)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Color.white)
@@ -453,7 +453,7 @@ struct AdminDashboardView: View {
                 Group {
                     if kelolaSegment == index {
                         LinearGradient(
-                            colors: [Color(hex: "#7C3AED"), Color(hex: "#5B21B6")],
+                            colors: [Color.adminPurple, Color.adminPurpleDark],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -474,7 +474,7 @@ struct AdminDashboardView: View {
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(hex: "#7C3AED"))
+                    .foregroundColor(Color.adminPurple)
 
                 TextField("Cari nama atau email pengguna...", text: $searchQuery)
                     .font(AppFont.subheadline())
@@ -494,7 +494,7 @@ struct AdminDashboardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color(hex: "#7C3AED").opacity(0.2), lineWidth: 1)
+                    .stroke(Color.adminPurple.opacity(0.2), lineWidth: 1)
             )
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -509,7 +509,7 @@ struct AdminDashboardView: View {
                 VStack(spacing: 16) {
                     ProgressView()
                         .scaleEffect(1.3)
-                        .tint(Color(hex: "#7C3AED"))
+                        .tint(Color.adminPurple)
                     Text("Memuat data...")
                         .font(AppFont.caption())
                         .foregroundColor(.textSecondary)
@@ -534,9 +534,9 @@ struct AdminDashboardView: View {
     private var userFilterTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                filterPill(title: "Semua", count: filteredUsers.count, index: 0, icon: "person.2.fill", color: Color(hex: "#7C3AED"))
-                filterPill(title: "Aktif", count: activeUsers.count, index: 1, icon: "checkmark.circle.fill", color: Color(hex: "#10B981"))
-                filterPill(title: "Tersuspend", count: suspendedUsers.count, index: 2, icon: "xmark.circle.fill", color: Color(hex: "#EF4444"))
+                filterPill(title: "Semua", count: filteredUsers.count, index: 0, icon: "person.2.fill", color: Color.adminPurple)
+                filterPill(title: "Aktif", count: activeUsers.count, index: 1, icon: "checkmark.circle.fill", color: Color.successEmerald)
+                filterPill(title: "Tersuspend", count: suspendedUsers.count, index: 2, icon: "xmark.circle.fill", color: Color.dangerRed)
             }
         }
     }
@@ -607,7 +607,7 @@ struct AdminDashboardView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "#7C3AED").opacity(0.1), Color(hex: "#7C3AED").opacity(0.05)],
+                            colors: [Color.adminPurple.opacity(0.1), Color.adminPurple.opacity(0.05)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -615,12 +615,12 @@ struct AdminDashboardView: View {
                     .frame(width: 100, height: 100)
 
                 Circle()
-                    .fill(Color(hex: "#7C3AED").opacity(0.15))
+                    .fill(Color.adminPurple.opacity(0.15))
                     .frame(width: 70, height: 70)
 
                 Image(systemName: "person.2.slash")
                     .font(.system(size: 32, weight: .medium))
-                    .foregroundColor(Color(hex: "#7C3AED").opacity(0.6))
+                    .foregroundColor(Color.adminPurple.opacity(0.6))
             }
 
             VStack(spacing: 8) {
@@ -646,10 +646,10 @@ struct AdminDashboardView: View {
                             .font(AppFont.caption())
                             .fontWeight(.semibold)
                     }
-                    .foregroundColor(Color(hex: "#7C3AED"))
+                    .foregroundColor(Color.adminPurple)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(Color(hex: "#7C3AED").opacity(0.1))
+                    .background(Color.adminPurple.opacity(0.1))
                     .clipShape(Capsule())
                 }
             }
@@ -759,7 +759,7 @@ struct AdminDashboardView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "#10B981").opacity(0.15), Color(hex: "#10B981").opacity(0.05)],
+                            colors: [Color.successEmerald.opacity(0.15), Color.successEmerald.opacity(0.05)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -767,12 +767,12 @@ struct AdminDashboardView: View {
                     .frame(width: 100, height: 100)
 
                 Circle()
-                    .fill(Color(hex: "#10B981").opacity(0.2))
+                    .fill(Color.successEmerald.opacity(0.2))
                     .frame(width: 70, height: 70)
 
                 Image(systemName: "checkmark.shield.fill")
                     .font(.system(size: 32, weight: .medium))
-                    .foregroundColor(Color(hex: "#10B981"))
+                    .foregroundColor(Color.successEmerald)
             }
 
             VStack(spacing: 8) {

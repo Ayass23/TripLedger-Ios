@@ -20,7 +20,7 @@ struct EditBankView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color(hex: "#10B981").opacity(0.15), Color(hex: "#059669").opacity(0.1)],
+                                    colors: [Color.successEmerald.opacity(0.15), Color.successEmeraldDark.opacity(0.1)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -31,7 +31,7 @@ struct EditBankView: View {
                             .font(.system(size: 28))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [Color(hex: "#10B981"), Color(hex: "#059669")],
+                                    colors: [Color.successEmerald, Color.successEmeraldDark],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -86,13 +86,13 @@ struct EditBankView: View {
                         .padding(.vertical, 14)
                         .background(
                             LinearGradient(
-                                colors: [Color(hex: "#10B981"), Color(hex: "#059669")],
+                                colors: [Color.successEmerald, Color.successEmeraldDark],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .shadow(color: Color(hex: "#10B981").opacity(0.3), radius: 8, y: 4)
+                        .shadow(color: Color.successEmerald.opacity(0.3), radius: 8, y: 4)
                     }
                     .disabled(profileVM.isLoading || bankName.isBlank || bankNum.isBlank || bankAcc.isBlank)
                     .opacity((profileVM.isLoading || bankName.isBlank || bankNum.isBlank || bankAcc.isBlank) ? 0.5 : 1)

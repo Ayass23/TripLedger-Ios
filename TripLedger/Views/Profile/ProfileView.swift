@@ -307,7 +307,7 @@ struct ProfileView: View {
                     .font(.system(size: 16))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color(hex: "#10B981"), Color(hex: "#059669")],
+                            colors: [Color.successEmerald, Color.successEmeraldDark],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -331,16 +331,16 @@ struct ProfileView: View {
                             .font(AppFont.caption())
                             .fontWeight(.semibold)
                     }
-                    .foregroundColor(Color(hex: "#10B981"))
+                    .foregroundColor(Color.successEmerald)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color(hex: "#10B981").opacity(0.1))
+                    .background(Color.successEmerald.opacity(0.1))
                     .clipShape(Capsule())
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color(hex: "#10B981").opacity(0.05))
+            .background(Color.successEmerald.opacity(0.05))
 
             Divider().background(Color.textPrimary.opacity(0.06))
 
@@ -348,7 +348,7 @@ struct ProfileView: View {
             let bank = authVM.currentUser?.bankInfo
             staticProfileRow(
                 icon: "building.columns.fill",
-                iconColor: Color(hex: "#10B981"),
+                iconColor: Color.successEmerald,
                 label: "Nama Bank",
                 value: bank?.bankName ?? "Belum diisi"
             )
@@ -358,7 +358,7 @@ struct ProfileView: View {
 
             staticProfileRow(
                 icon: "creditcard.fill",
-                iconColor: Color(hex: "#10B981"),
+                iconColor: Color.successEmerald,
                 label: "Nomor Rekening",
                 value: bank?.accountNumber ?? "—"
             )
@@ -368,7 +368,7 @@ struct ProfileView: View {
 
             staticProfileRow(
                 icon: "person.text.rectangle.fill",
-                iconColor: Color(hex: "#10B981"),
+                iconColor: Color.successEmerald,
                 label: "Nama Pemilik",
                 value: bank?.accountName ?? "—"
             )

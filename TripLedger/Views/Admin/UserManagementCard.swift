@@ -37,7 +37,7 @@ struct UserManagementCard: View {
                                 .padding(.vertical, 3)
                                 .background(
                                     LinearGradient(
-                                        colors: [Color(hex: "#7C3AED"), Color(hex: "#5B21B6")],
+                                        colors: [Color.adminPurple, Color.adminPurpleDark],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
