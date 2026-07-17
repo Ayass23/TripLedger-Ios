@@ -11,6 +11,7 @@ final class AdminViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let db = FirestoreService.shared
+    private let functions = CloudFunctionsService.shared
     private var usersListener: ListenerRegistration?
     private var reportsListener: ListenerRegistration?
     private var appealsListener: ListenerRegistration?
@@ -256,6 +257,36 @@ final class AdminViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             AppLog.debug("❌ [AdminVM] Error unsuspending user: \(error)")
+        }
+    }
+
+    // MARK: - Delete User Permanently
+    /// Wipes the account for good — Firebase Auth entry included, so the email
+    /// becomes free to register again.
+    ///
+    /// The work happens in the `deleteUserPermanently` Cloud Function because
+    /// the client SDK can only delete the account it is signed in as. Shared
+    /// expenses and bills survive with the user anonymised: deleting them would
+    /// destroy the records and debts of the other members on them. Debts that
+    /// involve the deleted user are written off instead, otherwise their trips
+    /// could never be finished — nobody would be left to pay, or to verify.
+    @discardableResult
+    func deleteUserPermanently(uid: String) async -> Bool {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await functions.call("deleteUserPermanently", data: ["uid": uid])
+
+            // The users listener will catch up too; this keeps the UI immediate.
+            allUsers.removeAll { $0.uid == uid }
+            errorMessage = nil
+            AppLog.debug("✅ [AdminVM] User \(uid) permanently deleted")
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            AppLog.debug("❌ [AdminVM] Error deleting user \(uid): \(error)")
+            return false
         }
     }
 

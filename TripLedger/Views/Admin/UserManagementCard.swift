@@ -9,6 +9,9 @@ struct UserManagementCard: View {
 
     @State private var showSuspendAlert = false
     @State private var showUnsuspendAlert = false
+    @State private var showDeleteAlert = false
+    @State private var isDeleting = false
+    @State private var deleteErrorMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -78,6 +81,7 @@ struct UserManagementCard: View {
                 Divider()
                     .background(Color.borderSoft)
 
+                VStack(spacing: 10) {
                 HStack(spacing: 10) {
                     if user.isSuspended {
                         Button {
@@ -127,6 +131,35 @@ struct UserManagementCard: View {
                         }
                     }
                 }
+
+                Button {
+                    showDeleteAlert = true
+                } label: {
+                    HStack(spacing: 6) {
+                        if isDeleting {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.errorRed)
+                        } else {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        Text(isDeleting ? "Menghapus..." : "Hapus Permanen")
+                            .font(AppFont.caption())
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundColor(.errorRed)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.errorRed.opacity(0.1))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.errorRed.opacity(0.35), lineWidth: 1)
+                    )
+                }
+                .disabled(isDeleting)
+                }
             }
         }
         .padding(16)
@@ -152,6 +185,36 @@ struct UserManagementCard: View {
             }
         } message: {
             Text("Aktifkan kembali akun \(user.displayName)? Pengguna akan bisa login ke aplikasi lagi.")
+        }
+        .alert("Hapus Permanen?", isPresented: $showDeleteAlert) {
+            Button("Batal", role: .cancel) { }
+            Button("Hapus Permanen", role: .destructive) {
+                Task {
+                    isDeleting = true
+                    let deleted = await adminVM.deleteUserPermanently(uid: user.uid)
+                    isDeleting = false
+                    if !deleted {
+                        deleteErrorMessage = adminVM.errorMessage ?? "Gagal menghapus pengguna."
+                    }
+                }
+            }
+        } message: {
+            Text("""
+            Akun \(user.displayName) (\(user.email)) akan dihapus selamanya dan TIDAK BISA dipulihkan.
+
+            Profil, pertemanan, dan notifikasinya ikut terhapus. Riwayat pengeluaran bersama tetap tersimpan dengan nama "Pengguna Dihapus", dan semua hutang yang menyangkut dia dianggap lunas supaya trip anggota lain tetap bisa diselesaikan.
+            """)
+        }
+        .alert(
+            "Gagal Menghapus",
+            isPresented: Binding(
+                get: { deleteErrorMessage != nil },
+                set: { if !$0 { deleteErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { deleteErrorMessage = nil }
+        } message: {
+            Text(deleteErrorMessage ?? "")
         }
         .tint(.brandPrimary)
     }
